@@ -4,15 +4,18 @@
 
 
 # setup ----
-
+rm(list=ls())
 library (tidyverse)
 library (googlesheets4)
 
 
 # https://sarahhamid.net/blog/maps-in-r/
 library (rnaturalearth)
+# install.packages("rnaturalearthdata")
 library (rnaturalearthdata)
 library (sf)
+# install.packages("cli")
+library(cli)
 
 # for labeling islands
 library (ggrepel)
