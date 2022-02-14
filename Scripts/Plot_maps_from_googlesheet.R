@@ -227,6 +227,106 @@ ggplot (data = world_AMC) +
          legend.text = element_text (size = 12))
 dev.off()
 
+#########################################################################################################################
+## Plot combinations of climate vulnerability and food insecurity ----
+
+dir.create ("Figures/Maps_compare")
+
+# food insecure and GAIN climate vulnerable or Tigchelaar vulnerable?
+
+# do we need to have the venn diagram map or can we just have summed risk indicators
+food_insecure <- read_sheet (ss = fspn_id, sheet = "Food insecurity FSD") 
+
+food_insecure_top <- food_insecure %>%
+  slice_max (FIES, prop = 0.25)  # 30 in top 25%
+
+food_insecure <- food_insecure %>% 
+  # make indicator column
+  mutate (top_insecure = ifelse(
+    iso3 %in% food_insecure_top$iso3, 1, 0
+  ))
+
+
+GAIN <- read_sheet(ss = fspn_id, sheet = "GAIN Food sector vulnerability") 
+
+GAIN_top <- GAIN %>%
+  slice_max (GAIN_food_vuln, prop = 0.25) # 48 in top 25%
+
+tig_cluster <- read_sheet (ss = fspn_id, sheet = "Tigchelaar climate risk clusters") 
+
+tig_vuln <- tig_cluster %>%
+  filter (cluster %in% c(3, 5)) # 46 countries
+
+# join climate vulnerability
+clim_vuln <- GAIN %>%
+  full_join (tig_cluster, by = "iso3") %>%
+  # make indicator column
+  mutate (top_vuln = ifelse (iso3 %in% GAIN_top$iso3 | cluster %in% c(3, 5), 1, 0)) %>%
+  select (iso3, top_vuln)
+
+insecure_food_vuln <- food_insecure %>%
+  #remove duplicated country column
+  select (-Country) %>%
+  #join datasets together
+  full_join (clim_vuln, by = "iso3") %>% 
+  # replace NAs with 0? not sure if this is the right move. too many forms of NAs, will only show as gray/NA if there are no data from any of these sources
+  replace_na(list(top_insecure = 0, top_vuln = 0)) %>%
+  # make category column by summing indicators
+  #rowwise %>%
+  mutate ( 
+    Risk = as.factor (case_when (
+      top_vuln == 1 & top_insecure == 0 ~ "Climate",
+      top_vuln == 0 & top_insecure == 1 ~ "Food insecurity",
+      top_vuln == 1 & top_insecure == 1 ~ "Both",
+      TRUE ~ "Neither")
+    )
+  )
+
+insecure_food_vuln$Risk <- factor (insecure_food_vuln$Risk, levels = c("Climate", "Food insecurity", "Both", "Neither", "No data"))
+
+
+world_insecure_food_vuln <- merge (world, insecure_food_vuln, all = TRUE) %>%
+  replace_na (list (Risk = "No data")) 
+
+# create subset of islands for separate labels
+# https://dadascience.design/post/r-low-budget-high-res-mapping-with-r-for-not-for-profit-print/
+islands <- world_insecure_food_vuln %>%
+  filter (Risk %in% c("Climate", "Food insecurity", "Both"),
+          subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia"))
+
+# centroids df for labels
+# https://r-spatial.org/r/2018/10/25/ggplot2-sf-2.html
+# https://stackoverflow.com/questions/68478179/how-to-resolve-spherical-geometry-failures-when-joining-spatial-data
+
+sf::sf_use_s2(FALSE)
+islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) # named X and Y
+islands_centroids <- islands_centroids %>%
+  #something weird with kiribati
+  mutate (X = ifelse (iso3 == "KIR", -168, X))
+
+
+# plot 
+
+png ("Figures/Maps_compare/Food_insecure_climate_vulnerable_012.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_insecure_food_vuln) +
+  geom_sf (aes (fill = as.factor(Risk)), lwd = .25, col = "black") +
+  scale_fill_manual (values = c( "white", "blue","red", "gray70")) +
+  scale_color_manual (values = c( "blue","red")) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Food insecurity and climate vulnerability") +
+  geom_label_repel (data = fortify (islands_centroids),
+                    aes (label = name, x = X, y = Y, 
+                         color = Risk), 
+                    size = 2.5, label.padding = 0.05,
+                    max.overlaps = 50
+  ) +
+  
+  guides (color = "none") +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12))
+dev.off()
+
 
 #############################################################################################################################
 # Plot single variable maps to compare metrics ----
