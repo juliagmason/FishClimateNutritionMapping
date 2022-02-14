@@ -14,6 +14,7 @@ library (rnaturalearth)
 # install.packages("rnaturalearthdata")
 library (rnaturalearthdata)
 library (sf)
+library (viridis) # for colorscale
 # install.packages("cli")
 library(cli)
 
@@ -21,7 +22,9 @@ library(cli)
 library (ggrepel)
 
 # make world map
-world <- ne_countries(scale = "medium", returnclass = "sf") 
+world <- ne_countries(scale = "medium", returnclass = "sf") %>%
+  # rename country code column to match our data
+  rename (iso3 = iso_a3)
 
 
 # pull data from google sheet ----
@@ -165,9 +168,8 @@ AMC_cat$Category <- factor (AMC_cat$Category, levels = c("Dependent on blue food
 # to plot on world map, have to restrict to countries, not territories
 
 AMC_countries <- AMC_cat %>%
-  filter (! grepl ("-", iso3_terr)) %>%
-  #rename to match map iso3 column
-  rename ("iso_a3" = iso3)
+  filter (! grepl ("-", iso3_terr))
+  
 
 
 world_AMC <- merge (world, AMC_countries, all = TRUE) %>%
@@ -221,6 +223,227 @@ ggplot (data = world_AMC) +
                     size = 3, label.padding = 0.10
   ) +
   guides (color = FALSE) +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12))
+dev.off()
+
+
+#############################################################################################################################
+# Plot single variable maps to compare metrics ----
+#############################################################################################################################
+dir.create ("Figures/Maps_singlevar")
+
+# Climate vulnerability: GAIN index ----
+GAIN_index <- read_sheet(ss = fspn_id, sheet = "GAIN Food sector vulnerability") 
+
+  
+world_GAIN <- merge (world, GAIN_index, all = TRUE)
+
+islands <- world_GAIN %>%
+  filter (subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia"))
+
+# centroids df for labels
+# https://r-spatial.org/r/2018/10/25/ggplot2-sf-2.html
+# https://stackoverflow.com/questions/68478179/how-to-resolve-spherical-geometry-failures-when-joining-spatial-data
+
+sf::sf_use_s2(FALSE)
+islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) # named X and Y
+islands_centroids <- islands_centroids %>%
+  filter (!is.na (GAIN_food_vuln)) %>%
+  #something weird with kiribati
+  mutate (X = ifelse (iso3 == "KIR", -168, X))
+
+
+png ("Figures/Maps_singlevar/Map_GAIN_food_vuln_islandlabels.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_GAIN) +
+  geom_sf (aes (fill = GAIN_food_vuln, color = GAIN_food_vuln), lwd = .25, col = "black") +
+  scale_fill_viridis(direction = -1) +
+  scale_color_viridis(direction = -1) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("GAIN Food vulnerability") +
+  geom_label_repel (data = fortify (islands_centroids),
+                    aes (label = name, x = X, y = Y, 
+                         color = GAIN_food_vuln), 
+                    size = 2.5, label.padding = 0.05,
+                    max.overlaps = 50
+  ) +
+  guides (color = "none") +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12))
+dev.off()
+
+# Climate vulnerability: Global climate risk index----
+
+GCRI <- read_sheet(ss = fspn_id, sheet = "Global climate risk index (FSD)") 
+
+world_GCRI <- merge (world, GCRI, all = TRUE)
+
+islands <- world_GCRI %>%
+  filter (subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia")) 
+sf::sf_use_s2(FALSE)
+islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) # named X and Y
+islands_centroids <- islands_centroids %>%
+  filter (!is.na (GCRI)) %>%
+  #something weird with kiribati
+  mutate (X = ifelse (iso3 == "KIR", -168, X))
+
+png ("Figures/Maps_singlevar/Map_GCRI_islandlabels.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_GCRI) +
+  geom_sf (aes (fill = GCRI), lwd = .25, col = "black") +
+  scale_fill_viridis(direction = -1) +
+  scale_color_viridis(direction = -1) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Global Climate Risk Index") +
+  geom_label_repel (data = fortify (islands_centroids),
+                    aes (label = name, x = X, y = Y, 
+                         color = GCRI), 
+                    size = 2.5, label.padding = 0.05,
+                    max.overlaps = 50
+  ) +
+  guides (color = "none") +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12))
+dev.off()
+
+# micronutrient deficient, Beal data----
+
+beal <- read_sheet(ss = fspn_id, sheet = "Beal micronutrient deficiency") 
+
+world_microdef <- merge (world, beal, all = TRUE)
+
+islands <- world_microdef %>%
+  filter (subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia")) 
+sf::sf_use_s2(FALSE)
+islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) # named X and Y
+islands_centroids <- islands_centroids %>%
+  filter (!is.na (PIMII)) %>%
+  #something weird with kiribati
+  mutate (X = ifelse (iso3 == "KIR", -168, X))
+
+png ("Figures/Maps_singlevar/Map_Microdef_Beal_islandlabels.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_microdef) +
+  geom_sf (aes (fill = PIMII), lwd = .25, col = "black") +
+  scale_fill_viridis(direction = -1) +
+  scale_color_viridis(direction = -1) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Micronutrient deficiency prevalence, Beal et al.") +
+  geom_label_repel (data = fortify (islands_centroids),
+                    aes (label = name, x = X, y = Y, 
+                         color = PIMII), 
+                    size = 2.5, label.padding = 0.05,
+                    max.overlaps = 50
+  ) +
+  guides (color = "none") +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12))
+dev.off()
+
+# micronutrient deficient, Golden data ----
+# proprietary, do not share
+#pro: includes omega 3, more recent?
+mic_def_golden <- read_csv ("Data/2017_sevs_country_average.csv")
+
+mic_def_mn_golden <- mic_def_golden %>%
+  group_by (iso3) %>%
+  summarize (mn_def = mean (sev_base))
+
+world_microdef_golden <- merge (world, mic_def_mn_golden, all = TRUE)
+
+islands <- world_microdef_golden %>%
+  filter (subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia")) 
+sf::sf_use_s2(FALSE)
+islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) # named X and Y
+islands_centroids <- islands_centroids %>%
+  filter (!is.na (mn_def)) %>%
+  #something weird with kiribati
+  mutate (X = ifelse (iso3 == "KIR", -168, X))
+
+png ("Figures/Maps_singlevar/Map_Microdef_Golden_islandlabels.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_microdef_golden) +
+  geom_sf (aes (fill = mn_def), lwd = .25, col = "black") +
+  scale_fill_viridis(direction = -1) +
+  scale_color_viridis(direction = -1) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Micronutrient deficiency prevalence, Golden et al.") +
+  geom_label_repel (data = fortify (islands_centroids),
+                    aes (label = name, x = X, y = Y, 
+                         color = mn_def), 
+                    size = 2.5, label.padding = 0.05,
+                    max.overlaps = 50
+  ) +
+  guides (color = "none") +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12))
+dev.off()
+  
+
+# food insecurity, FSD ----
+food_insecure <- read_sheet(ss = fspn_id, sheet = "Food insecurity FSD") 
+
+world_insec <- merge (world, food_insecure, all = TRUE)
+
+islands <-world_insec %>%
+  filter (subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia")) 
+sf::sf_use_s2(FALSE)
+islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) # named X and Y
+islands_centroids <- islands_centroids %>%
+  filter (!is.na (FIES)) %>%
+  #something weird with kiribati
+  mutate (X = ifelse (iso3 == "KIR", -168, X))
+
+png ("Figures/Maps_singlevar/Map_foodinsecure_islandlabels.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_insec) +
+  geom_sf (aes (fill = FIES), lwd = .25, col = "black") +
+  scale_fill_viridis(direction = -1) +
+  scale_color_viridis(direction = -1) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Food insecurity, FSD") +
+  geom_label_repel (data = fortify (islands_centroids),
+                    aes (label = name, x = X, y = Y, 
+                         color = FIES), 
+                    size = 2.5, label.padding = 0.05,
+                    max.overlaps = 50
+  ) +
+  guides (color = "none") +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12))
+dev.off()
+
+# global hunger index ----
+ghi <- read_sheet(ss = fspn_id, sheet = "Global Hunger Index") %>%
+  rename (iso3 = iso3_sov)
+
+world_ghi <- merge (world, ghi, all = TRUE)
+
+islands <-world_ghi %>%
+  filter (subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia")) 
+sf::sf_use_s2(FALSE)
+islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) # named X and Y
+islands_centroids <- islands_centroids %>%
+  filter (!is.na (GHI)) %>%
+  #something weird with kiribati
+  mutate (X = ifelse (iso3 == "KIR", -168, X))
+
+png ("Figures/Maps_singlevar/Map_GHI_islandlabels.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_ghi) +
+  geom_sf (aes (fill = GHI), lwd = .25, col = "black") +
+  scale_fill_viridis(direction = -1) +
+  scale_color_viridis(direction = -1) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Global Hunger Index") +
+  geom_label_repel (data = fortify (islands_centroids),
+                    aes (label = name, x = X, y = Y, 
+                         color = GHI), 
+                    size = 2.5, label.padding = 0.05,
+                    max.overlaps = 50
+  ) +
+  guides (color = "none") +
   theme (plot.title = element_text (hjust = 0.5, size = 16),
          legend.text = element_text (size = 12))
 dev.off()
