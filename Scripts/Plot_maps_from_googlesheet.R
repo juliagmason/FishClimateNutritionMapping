@@ -308,11 +308,11 @@ islands_centroids <- islands_centroids %>%
 
 # plot 
 
-png ("Figures/Maps_compare/Food_insecure_climate_vulnerable_012.png", width = 14, height = 6, units = "in", res = 300)
+png ("Figures/Maps_compare/Food_insecure_climate_vulnerable.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_insecure_food_vuln) +
   geom_sf (aes (fill = as.factor(Risk)), lwd = .25, col = "black") +
-  scale_fill_manual (values = c( "white", "blue","red", "gray70")) +
-  scale_color_manual (values = c( "blue","red")) +
+  scale_fill_manual (values = c( "blue","red","purple", "gray70", "white")) +
+  scale_color_manual (values = c( "blue","red","purple")) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
   ggtitle ("Food insecurity and climate vulnerability") +

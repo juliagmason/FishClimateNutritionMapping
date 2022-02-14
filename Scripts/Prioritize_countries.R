@@ -45,7 +45,7 @@ GAIN$iso3[which (!GAIN$iso3 %in% GCRI$iso3)] # "SOM" "SYR" "GNQ" "PLW" "NRU" "CU
 
 # top scores from each?
 GAIN_top <-  GAIN %>%
-  slice_max (GAIN_food_vuln, n = 50)
+  slice_max (GAIN_food_vuln, n = 50) # 48 in top 25%
 
 GCRI_top  <-  GCRI %>%
   slice_max (GCRI, n = 50)
@@ -72,7 +72,11 @@ climvuln_microdef <- beal_top$Country[which (beal_top$iso3 %in% clim_vuln_join$i
 
 
 food_insecure_top <- read_sheet (ss = fspn_id, sheet = "Food insecurity FSD") %>%
-  slice_max (FIES, n = 50)
+  slice_max (FIES, n = 50) # 30 in top 25%
+
+ghi_top <- read_sheet (ss = fspn_id, sheet = "Global Hunger Index") %>%
+  rename (iso3 = iso3_sov) %>%
+  slice_max (GHI, n = 50)
 
 
 # look at combinations ---
