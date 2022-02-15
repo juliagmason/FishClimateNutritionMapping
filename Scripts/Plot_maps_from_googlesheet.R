@@ -209,27 +209,10 @@ ggplot (data = world_AMC) +
 dev.off()
 
 ## Same plot but label countries with category "both"??
-# both <- AMC_countries %>% # used AMC to grab category
-#   filter (!Category %in% c("Neither", "Micronutrient deficient", "Dependent on blue foods", "NA", "No data")) # show everything else
-
-# Just filter from the already merged world_AMC sf object ? Does this achieve what you wanted?
 both <- world_AMC %>%
   filter (Category == "Both")
 
 both_centroids <- cbind(both, st_coordinates(st_centroid(both)))
-
-# # merge world_AMC back in (as done with islands), drop the rest
-# # clean and show steps 1-1
-# both_merge <- merge(x = both, y = world_AMC, by = "iso3", all.x = TRUE, all.y = TRUE)
-# both_merge <- both_merge[!is.na(both_merge$Category.x),]
-# both_merge <- both_merge[!is.na(both_merge$type),]
-# both_merge <- both_merge[both_merge$Category.x == "Both",]
-# both_merge <- rename(both_merge, Category = Category.x)
-# both_merge <- both_merge[,-(2:7)]
-# 
-# sf::sf_use_s2(FALSE) ### JM-Q what am I doing wrong here?
-# # Wanted to get the centroid object to label just the countries with "both"
-# both_centroids <- cbind(both_merge, st_coordinates(st_centroid(both_merge)))
 
 png ("Figures/Map_country_categories_both.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_AMC) +
@@ -324,7 +307,6 @@ insecure_food_vuln <- food_insecure %>%
 
 insecure_food_vuln$Risk <- factor (insecure_food_vuln$Risk, levels = c("Climate", "Food insecurity", "Both", "Neither", "No data"))
 
-
 world_insecure_food_vuln <- merge (world, insecure_food_vuln, all = TRUE) %>%
   replace_na (list (Risk = "No data")) 
 
@@ -346,7 +328,6 @@ islands_centroids <- islands_centroids %>%
 
 
 # plot 
-
 png ("Figures/Maps_compare/Food_insecure_climate_vulnerable.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_insecure_food_vuln) +
   geom_sf (aes (fill = as.factor(Risk)), lwd = .25, col = "black") +
@@ -356,6 +337,31 @@ ggplot (data = world_insecure_food_vuln) +
   labs (fill = "", x = "", y = "") +
   ggtitle ("Food insecurity and climate vulnerability") +
   geom_label_repel (data = fortify (islands_centroids),
+                    aes (label = name, x = X, y = Y, 
+                         color = Risk), 
+                    size = 2.5, label.padding = 0.05,
+                    max.overlaps = 50) +
+  guides (color = "none") +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12))
+dev.off()
+
+# plot with BOTH labelled
+both_food <- world_insecure_food_vuln %>%
+  filter (Risk %in% c("Both"))
+
+sf::sf_use_s2(FALSE)
+both_food_centroids <- cbind(both_food, st_coordinates(st_centroid(both_food))) # named X and Y
+
+png ("Figures/Maps_compare/Food_insecure_climate_vulnerable_both.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_insecure_food_vuln) +
+  geom_sf (aes (fill = as.factor(Risk)), lwd = .25, col = "black") +
+  scale_fill_manual (values = c( "goldenrod1","red","darkorange2", "gray70", "white")) +
+  scale_color_manual (values = c( "goldenrod1","red","darkorange2")) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Food insecurity and climate vulnerability") +
+  geom_label_repel (data = fortify (both_food_centroids),
                     aes (label = name, x = X, y = Y, 
                          color = Risk), 
                     size = 2.5, label.padding = 0.05,
