@@ -221,9 +221,9 @@ both_merge <- both_merge[both_merge$Category.x == "Both",]
 both_merge <- rename(both_merge, Category = Category.x)
 both_merge <- both_merge[,-(2:7)]
 
-sf::sf_use_s2(FALSE) ### JM what am I doing wrong here?
+sf::sf_use_s2(FALSE) ### JM-Q what am I doing wrong here?
 # Wanted to get the centroid object to label just the countries with "both"
-both_centroids <- cbind(both_merge, st_coordinates(st_centroid(both_merge))) # named X and Y
+both_centroids <- cbind(both_merge, st_coordinates(st_centroid(both_merge)))
 
 png ("Figures/Map_country_categories_both.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_AMC) +
@@ -233,7 +233,7 @@ ggplot (data = world_AMC) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
   ggtitle ("Blue food dependent and micronutrient deficient") +
-  geom_label_repel (data = fortify (both_merge),
+  geom_label_repel (data = fortify (both_centroids),
                     aes (label = name, x = X, y = Y, 
                          color = Category), 
                     size = 3, label.padding = 0.10) +
