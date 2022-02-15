@@ -67,24 +67,24 @@ AMC <- AMC %>%
 
 # Categorize countries ----
 
-AMC_cat  <-  AMC %>%
-  mutate (
-    
-    Category = as.factor(case_when (
-      fish_dep_rank <= 100 & mic_def_rank <=100 ~ "Both",
-      fish_dep_rank <=100 & is.na(mic_def_rank) ~ "Dependent on blue foods",
-      fish_dep_rank <=100 & mic_def_rank > 100 ~ "Dependent on blue foods",
-      mic_def_rank <=100 & is.na (fish_dep_rank ) ~  "Micronutrient deficient",
-      mic_def_rank <= 100 & fish_dep_rank > 100 ~ "Micronutrient deficient",
-      is.na (mic_def_rank) & is.na (fish_dep_rank) ~ "No data",
-      
-      TRUE ~ "Neither"))
-    
-    ) %>%
-  select (Country, iso3, iso3_terr, fish_dep_rank, fish_loss_rank, mic_def_rank, Category) 
-
-# set order of levels
-AMC_cat$Category <- factor (AMC_cat$Category, levels = c("Dependent on blue foods", "Micronutrient deficient", "Both", "Neither", "No data"))
+# AMC_cat  <-  AMC %>%
+#   mutate (
+#     
+#     Category = as.factor(case_when (
+#       fish_dep_rank <= 100 & mic_def_rank <=100 ~ "Both",
+#       fish_dep_rank <=100 & is.na(mic_def_rank) ~ "Dependent on blue foods",
+#       fish_dep_rank <=100 & mic_def_rank > 100 ~ "Dependent on blue foods",
+#       mic_def_rank <=100 & is.na (fish_dep_rank ) ~  "Micronutrient deficient",
+#       mic_def_rank <= 100 & fish_dep_rank > 100 ~ "Micronutrient deficient",
+#       is.na (mic_def_rank) & is.na (fish_dep_rank) ~ "No data",
+#       
+#       TRUE ~ "Neither"))
+#     
+#     ) %>%
+#   select (Country, iso3, iso3_terr, fish_dep_rank, fish_loss_rank, mic_def_rank, Category) 
+# 
+# # set order of levels
+# AMC_cat$Category <- factor (AMC_cat$Category, levels = c("Dependent on blue foods", "Micronutrient deficient", "Both", "Neither", "No data"))
 
 # If we filter at rank <=50 for both, get 19 countries in the "Both" category: Angola, Bangladesh, Benin, Cambodia, Grenada, Guinea, Ivory Coast, Mozambique, Nigerial NK, Ppns, Kiribas, RdCongo , Sato Tome, Sierra Leone, Solomons, Sri Lanka, Thailand, Togo.
 
@@ -305,7 +305,7 @@ ggplot (data = world_rcp) +
                     aes (label = name, x = X, y = Y), 
                     color = "red",
                     size = 2.5, label.padding = 0.05, max.overlaps = 50) +
-  guides (color = FALSE) +
+  guides (color = "none") +
   theme (plot.title = element_text (hjust = 0.5, size = 16),
          legend.text = element_text (size = 12)) 
 dev.off()
