@@ -103,7 +103,7 @@ AMC_cat$Category <- factor (AMC_cat$Category, levels = c("Dependent on blue food
 
 # 7 columns. Iso3c (3 letter country code), nutrient, total terrestrial (amt available from land), total_aquatic (amt available from aquatic), total (sum of total terrestrial and total aquatic), prop_terrestrial, and prop_aquatic. 
 # I only care about iso3c, nutrient, and prop_aquatic, and want to rename the country column to match mic_def
-# [JE only] setwd("~/Documents/ACTIVE Research/EDF/Projects/Climate Resilient Food System/R")
+setwd("~/Documents/ACTIVE Research/EDF/Projects/Climate Resilient Food System/R")
 mic_dep <- read_csv ("Data/DO_NOT_SHARE_seafood_nutrient_supply_GND_012021.csv") %>%
   select (iso3c, nutrient, prop_aquatic) %>%
   rename (iso3 = iso3c)
