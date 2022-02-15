@@ -249,13 +249,74 @@ ggplot (data = world_AMC) +
          legend.text = element_text (size = 12)) 
 dev.off()
 
+# triple threat: blue food dependent, micronutrient deficient, and climate vulnerable ----
+# climate vulnerable defined as projected to lose 50% or more of their catch by 2100, using Gaines projections
+
+# made thise in Prioritize_countries.R. 12 countries for RCP 6.0, 18 countries for RCP 8.5
+load ("Data/Priority_loss_rcp60_12.RData")
+load ("Data/Priority_loss_rcp85_18.RData")
+
+# have to add iso3 codes
+loss_6_codes <- lose50_60_12 %>%
+  rename (Country = country) %>%
+  left_join (codes, by = "Country") %>%
+  mutate (iso3 = ifelse (Country == "Ivory Coast", "CIV", iso3))
+
+loss_8_codes <- lose50_85_18 %>%
+  rename (Country = country) %>%
+  left_join (codes, by = "Country") %>%
+  mutate (iso3 = ifelse (Country == "Ivory Coast", "CIV", iso3))
+
+# try to do this from world_AMC instead of recategorizing?
+# need to add RCP column 
+world6 <- world_AMC %>%
+  mutate (rcp = "RCP 6.0")
+world8 <- world_AMC %>%
+  mutate (rcp = "RCP 8.5")
+
+world_rcp <- rbind (world6, world8)
+
+world_rcp <- world_rcp %>%
+  mutate (Category = 
+            case_when (rcp == "RCP 6.0" & iso3 %in% loss_6_codes$iso3 & Category == "Both" ~ "Climate vulnerable",
+                       rcp == "RCP 8.5" & iso3 %in% loss_8_codes$iso3 & Category == "Both"~ "Climate vulnerable",
+                       Category == "Neither" ~ "None",
+                       TRUE ~ as.character(Category))
+  )
+
+# set order of labels
+world_rcp$Category <- factor (world_rcp$Category, levels = c("Dependent on blue foods", "Micronutrient deficient", "Both", "Climate vulnerable", "None", "No data"))
+
+triple <- world_rcp %>%
+  filter (Category == "Climate vulnerable")
+
+triple_centroids <- cbind(triple, st_coordinates(st_centroid(triple)))
+
+png ("Figures/Maps_compare/Map_country_categories_triple_threat.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_rcp) +
+  geom_sf (aes (fill = Category), lwd = .25, col = "black") +
+  scale_fill_manual (values = c("blue","hotpink1","purple", "red", "gray70", "white")) +
+  #scale_color_manual (values = c("blue","hotpink1","purple")) +
+  facet_wrap (~rcp) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Blue food dependent, micronutrient deficient, and climate vulnerable") +
+  geom_label_repel (data = fortify (triple_centroids),
+                    aes (label = name, x = X, y = Y), 
+                    color = "red",
+                    size = 2.5, label.padding = 0.05, max.overlaps = 50) +
+  guides (color = FALSE) +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12)) 
+dev.off()
+
 
 #########################################################################################################################
-## Plot combinations of climate vulnerability and food insecurity ----
+## Plot combinations of climate vulnerability and food insecure ----
 
 dir.create ("Figures/Maps_compare")
 
-# food insecure and GAIN climate vulnerable or Tigchelaar vulnerable?
+# food insecure and GAIN climate vulnerable or Tigchelaar vulnerable ----
 
 # do we need to have the venn diagram map or can we just have summed risk indicators
 food_insecure <- read_sheet (ss = fspn_id, sheet = "Food insecurity FSD") 
@@ -373,8 +434,79 @@ dev.off()
 
 #########################################################################################################################
 ## Plot combinations of climate vulnerability and POU ----
+pou <- read_sheet (ss = fspn_id, sheet = "Prevalence of undernourishment FSD")
+
+pou_top <- pou %>%
+  slice_max (POU, prop = 0.25)  # 42 in top 25%
+
+pou <- pou %>% 
+  # make indicator column
+  mutate (top_pou = ifelse(
+    iso3 %in% pou_top$iso3, 1, 0
+  ))
+
+pou_food_vuln <- pou %>%
+  #join datasets together
+  full_join (clim_vuln, by = "iso3") %>% 
+  # replace NAs with 0? not sure if this is the right move. too many forms of NAs, will only show as gray/NA if there are no data from any of these sources
+  replace_na(list(top_pou = 0, top_vuln = 0)) %>%
+  # make category column by summing indicators
+  #rowwise %>%
+  mutate ( 
+    Risk = as.factor (case_when (
+      top_vuln == 1 & top_pou == 0 ~ "Climate vulnerable",
+      top_vuln == 0 & top_pou == 1 ~ "Undernourished",
+      top_vuln == 1 & top_pou == 1 ~ "Both",
+      TRUE ~ "Neither")
+    )
+  )
+
+pou_food_vuln$Risk <- factor (pou_food_vuln$Risk, levels = c("Climate vulnerable", "Undernourished", "Both", "Neither", "No data"))
+
+world_pou_food_vuln <- merge (world, pou_food_vuln, all = TRUE) %>%
+  replace_na (list (Risk = "No data")) 
+
+# create subset of islands for separate labels
+# https://dadascience.design/post/r-low-budget-high-res-mapping-with-r-for-not-for-profit-print/
+islands <- world_pou_food_vuln %>%
+  filter (Risk %in% c("Climate vulnerable", "Undernourished", "Both"),
+          subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia"))
+
+# centroids df for labels
+# https://r-spatial.org/r/2018/10/25/ggplot2-sf-2.html
+# https://stackoverflow.com/questions/68478179/how-to-resolve-spherical-geometry-failures-when-joining-spatial-data
+
+sf::sf_use_s2(FALSE)
+islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) # named X and Y
+islands_centroids <- islands_centroids %>%
+  #something weird with kiribati
+  mutate (X = ifelse (iso3 == "KIR", -168, X))
 
 
+# plot with BOTH labelled
+both_food <- world_pou_food_vuln %>%
+  filter (Risk %in% c("Both"))
+
+sf::sf_use_s2(FALSE)
+both_food_centroids <- cbind(both_food, st_coordinates(st_centroid(both_food))) # named X and Y
+
+png ("Figures/Maps_compare/Food_pou_climate_vulnerable_both.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_pou_food_vuln) +
+  geom_sf (aes (fill = as.factor(Risk)), lwd = .25, col = "black") +
+  scale_fill_manual (values = c( "goldenrod1","hotpink1","red", "gray70", "white")) +
+  scale_color_manual (values = c( "goldenrod1","hotpink1","red")) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Prevalance of undernourishment & climate vulnerability") +
+  geom_label_repel (data = fortify (both_food_centroids),
+                    aes (label = name, x = X, y = Y), 
+                    color = "red",
+                    size = 2.5, label.padding = 0.10,
+                    max.overlaps = 50) +
+  guides (color = "none") +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12))
+dev.off()
 
 
 #############################################################################################################################
