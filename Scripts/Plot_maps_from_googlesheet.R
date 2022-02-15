@@ -188,7 +188,7 @@ islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) # name
 islands_centroids <- islands_centroids %>%
   filter (!is.na (Category)) %>%
   #something weird with kiribati
-  mutate (X = ifelse (iso_a3 == "KIR", -168, X))
+  mutate (X = ifelse (iso3 == "KIR", -168, X))
 
 
 # Plot combination of blue food dependency and micronutrient deficiencies ----
@@ -209,21 +209,27 @@ ggplot (data = world_AMC) +
 dev.off()
 
 ## Same plot but label countries with category "both"??
-both <- AMC_countries %>% # used AMC to grab category
-  filter (!Category %in% c("Neither", "Micronutrient deficient", "Dependent on blue foods", "NA", "No data")) # show everything else
+# both <- AMC_countries %>% # used AMC to grab category
+#   filter (!Category %in% c("Neither", "Micronutrient deficient", "Dependent on blue foods", "NA", "No data")) # show everything else
 
-# merge world_AMC back in (as done with islands), drop the rest
-# clean and show steps 1-1
-both_merge <- merge(x = both, y = world_AMC, by = "iso3", all.x = TRUE, all.y = TRUE)
-both_merge <- both_merge[!is.na(both_merge$Category.x),]
-both_merge <- both_merge[!is.na(both_merge$type),]
-both_merge <- both_merge[both_merge$Category.x == "Both",]
-both_merge <- rename(both_merge, Category = Category.x)
-both_merge <- both_merge[,-(2:7)]
+# Just filter from the already merged world_AMC sf object ? Does this achieve what you wanted?
+both <- world_AMC %>%
+  filter (Category == "Both")
 
-sf::sf_use_s2(FALSE) ### JM-Q what am I doing wrong here?
-# Wanted to get the centroid object to label just the countries with "both"
-both_centroids <- cbind(both_merge, st_coordinates(st_centroid(both_merge)))
+both_centroids <- cbind(both, st_coordinates(st_centroid(both)))
+
+# # merge world_AMC back in (as done with islands), drop the rest
+# # clean and show steps 1-1
+# both_merge <- merge(x = both, y = world_AMC, by = "iso3", all.x = TRUE, all.y = TRUE)
+# both_merge <- both_merge[!is.na(both_merge$Category.x),]
+# both_merge <- both_merge[!is.na(both_merge$type),]
+# both_merge <- both_merge[both_merge$Category.x == "Both",]
+# both_merge <- rename(both_merge, Category = Category.x)
+# both_merge <- both_merge[,-(2:7)]
+# 
+# sf::sf_use_s2(FALSE) ### JM-Q what am I doing wrong here?
+# # Wanted to get the centroid object to label just the countries with "both"
+# both_centroids <- cbind(both_merge, st_coordinates(st_centroid(both_merge)))
 
 png ("Figures/Map_country_categories_both.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_AMC) +
@@ -234,9 +240,9 @@ ggplot (data = world_AMC) +
   labs (fill = "", x = "", y = "") +
   ggtitle ("Blue food dependent and micronutrient deficient") +
   geom_label_repel (data = fortify (both_centroids),
-                    aes (label = name, x = X, y = Y, 
-                         color = Category), 
-                    size = 3, label.padding = 0.10) +
+                    aes (label = name, x = X, y = Y), 
+                    color = "purple",
+                    size = 2.5, label.padding = 0.10) +
   guides (color = FALSE) +
   theme (plot.title = element_text (hjust = 0.5, size = 16),
          legend.text = element_text (size = 12)) 
