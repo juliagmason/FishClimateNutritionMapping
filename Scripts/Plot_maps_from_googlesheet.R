@@ -103,7 +103,7 @@ AMC_cat$Category <- factor (AMC_cat$Category, levels = c("Dependent on blue food
 
 # 7 columns. Iso3c (3 letter country code), nutrient, total terrestrial (amt available from land), total_aquatic (amt available from aquatic), total (sum of total terrestrial and total aquatic), prop_terrestrial, and prop_aquatic. 
 # I only care about iso3c, nutrient, and prop_aquatic, and want to rename the country column to match mic_def
-setwd("~/Documents/ACTIVE Research/EDF/Projects/Climate Resilient Food System/R")
+# [JE only] setwd("~/Documents/ACTIVE Research/EDF/Projects/Climate Resilient Food System/R")
 mic_dep <- read_csv ("Data/DO_NOT_SHARE_seafood_nutrient_supply_GND_012021.csv") %>%
   select (iso3c, nutrient, prop_aquatic) %>%
   rename (iso3 = iso3c)
@@ -217,8 +217,8 @@ both_centroids <- cbind(both, st_coordinates(st_centroid(both)))
 png ("Figures/Map_country_categories_both.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_AMC) +
   geom_sf (aes (fill = Category), lwd = .25, col = "black") +
-  scale_fill_manual (values = c("blue","red","purple", "gray70", "white")) +
-  scale_color_manual (values = c("blue","red","purple")) +
+  scale_fill_manual (values = c("blue","hotpink1","purple", "gray70", "white")) +
+  scale_color_manual (values = c("blue","hotpink1","purple")) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
   ggtitle ("Blue food dependent and micronutrient deficient") +
@@ -298,14 +298,14 @@ insecure_food_vuln <- food_insecure %>%
   #rowwise %>%
   mutate ( 
     Risk = as.factor (case_when (
-      top_vuln == 1 & top_insecure == 0 ~ "Climate",
-      top_vuln == 0 & top_insecure == 1 ~ "Food insecurity",
+      top_vuln == 1 & top_insecure == 0 ~ "Climate vulnerable",
+      top_vuln == 0 & top_insecure == 1 ~ "Food insecure",
       top_vuln == 1 & top_insecure == 1 ~ "Both",
       TRUE ~ "Neither")
     )
   )
 
-insecure_food_vuln$Risk <- factor (insecure_food_vuln$Risk, levels = c("Climate", "Food insecurity", "Both", "Neither", "No data"))
+insecure_food_vuln$Risk <- factor (insecure_food_vuln$Risk, levels = c("Climate vulnerable", "Food insecure", "Both", "Neither", "No data"))
 
 world_insecure_food_vuln <- merge (world, insecure_food_vuln, all = TRUE) %>%
   replace_na (list (Risk = "No data")) 
@@ -313,7 +313,7 @@ world_insecure_food_vuln <- merge (world, insecure_food_vuln, all = TRUE) %>%
 # create subset of islands for separate labels
 # https://dadascience.design/post/r-low-budget-high-res-mapping-with-r-for-not-for-profit-print/
 islands <- world_insecure_food_vuln %>%
-  filter (Risk %in% c("Climate", "Food insecurity", "Both"),
+  filter (Risk %in% c("Climate vulnerable", "Food insecure", "Both"),
           subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia"))
 
 # centroids df for labels
@@ -356,20 +356,25 @@ both_food_centroids <- cbind(both_food, st_coordinates(st_centroid(both_food))) 
 png ("Figures/Maps_compare/Food_insecure_climate_vulnerable_both.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_insecure_food_vuln) +
   geom_sf (aes (fill = as.factor(Risk)), lwd = .25, col = "black") +
-  scale_fill_manual (values = c( "goldenrod1","red","darkorange2", "gray70", "white")) +
-  scale_color_manual (values = c( "goldenrod1","red","darkorange2")) +
+  scale_fill_manual (values = c( "goldenrod1","hotpink1","red", "gray70", "white")) +
+  scale_color_manual (values = c( "goldenrod1","hotpink1","red")) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
   ggtitle ("Food insecurity and climate vulnerability") +
   geom_label_repel (data = fortify (both_food_centroids),
-                    aes (label = name, x = X, y = Y, 
-                         color = Risk), 
-                    size = 2.5, label.padding = 0.05,
-                    max.overlaps = 50) +
+                    aes (label = name, x = X, y = Y), 
+                    color = "red",
+                    size = 2.5, label.padding = 0.10) +
   guides (color = "none") +
   theme (plot.title = element_text (hjust = 0.5, size = 16),
          legend.text = element_text (size = 12))
 dev.off()
+
+
+#########################################################################################################################
+## Plot combinations of climate vulnerability and POU ----
+
+
 
 
 #############################################################################################################################
