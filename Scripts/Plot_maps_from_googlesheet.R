@@ -52,7 +52,7 @@ codes_AMC <- codes %>%
 AMC <- cbind (AMC, codes_AMC)
 
 # clean: get rid of NA iso3[this gets rid of "Islands in the Mozambique Channel" and "Sahara,South"]
-# also remove kiribati line group, creating problems and has no data
+# also remove Kiribati line group, creating problems and has no data
 # rename wordy column headers to work in R
 AMC <- AMC %>%
   filter (!is.na (iso3), !iso3_terr == "KIR-LG") %>%
@@ -131,7 +131,6 @@ protein_dep  <- read_sheet (ss = fspn_id, sheet = "Protein dependence on oceans"
       Country == "The Former Yugoslav Republic of Macedonia" ~ "North Macedonia",
       Country == "Brunei Darussalam" ~ "Brunei",
       Country == "Slovakia" ~ "Slovak Republic",
-      
       Country == "Swaziland" ~ "Eswatini",
       TRUE ~ Country)
   ) %>%
@@ -170,8 +169,6 @@ AMC_cat$Category <- factor (AMC_cat$Category, levels = c("Dependent on blue food
 
 AMC_countries <- AMC_cat %>%
   filter (! grepl ("-", iso3_terr))
-  
-
 
 world_AMC <- merge (world, AMC_countries, all = TRUE) %>%
   replace_na (list (Category = "No data")) 
@@ -194,30 +191,65 @@ islands_centroids <- islands_centroids %>%
   mutate (X = ifelse (iso_a3 == "KIR", -168, X))
 
 
-# plot maps ----
+# Plot combination of blue food dependency and micronutrient deficiencies ----
+# while (!is.null(dev.list())) # code to break dev.off null device = 1
+# color guide: http://sape.inf.usi.ch/quick-reference/ggplot2/colour # ("goldenrod1", "darkorange1", "firebrick4")
 
 png ("Figures/Map_country_categories.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_AMC) +
   geom_sf (aes (fill = Category), lwd = .25, col = "black") +
-  scale_fill_manual (values = c( "blue","red","purple", "gray70", "white")) +
-  scale_color_manual (values = c( "blue","red","purple")) +
+  scale_fill_manual (values = c("blue","red","purple", "gray70", "white")) +
+  scale_color_manual (values = c("blue","red","purple")) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
   ggtitle ("Priority country categories") +
-  
   guides (color = "none") +
   theme (plot.title = element_text (hjust = 0.5, size = 16),
          legend.text = element_text (size = 12))
 dev.off()
 
+## Same plot but label countries with category "both"??
+both <- AMC_countries %>% # used AMC to grab category
+  filter (!Category %in% c("Neither", "Micronutrient deficient", "Dependent on blue foods", "NA", "No data")) # show everything else
+
+# merge world_AMC back in (as done with islands), drop the rest
+# clean and show steps 1-1
+both_merge <- merge(x = both, y = world_AMC, by = "iso3", all.x = TRUE, all.y = TRUE)
+both_merge <- both_merge[!is.na(both_merge$Category.x),]
+both_merge <- both_merge[!is.na(both_merge$type),]
+both_merge <- both_merge[both_merge$Category.x == "Both",]
+both_merge <- rename(both_merge, Category = Category.x)
+both_merge <- both_merge[,-(2:7)]
+
+sf::sf_use_s2(FALSE) ### JM what am I doing wrong here?
+# Wanted to get the centroid object to label just the countries with "both"
+both_centroids <- cbind(both_merge, st_coordinates(st_centroid(both_merge))) # named X and Y
+
+png ("Figures/Map_country_categories_both.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_AMC) +
+  geom_sf (aes (fill = Category), lwd = .25, col = "black") +
+  scale_fill_manual (values = c("blue","red","purple", "gray70", "white")) +
+  scale_color_manual (values = c("blue","red","purple")) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Blue food dependent and micronutrient deficient") +
+  geom_label_repel (data = fortify (both_merge),
+                    aes (label = name, x = X, y = Y, 
+                         color = Category), 
+                    size = 3, label.padding = 0.10) +
+  guides (color = FALSE) +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12)) 
+dev.off()
+
 png ("Figures/Map_country_categories_islandlabels.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_AMC) +
   geom_sf (aes (fill = Category), lwd = .25, col = "black") +
-  scale_fill_manual (values = c( "blue","red","purple", "gray70", "white")) +
-  scale_color_manual (values = c( "blue","red","purple")) +
+  scale_fill_manual (values = c("blue","red","purple", "gray70", "white")) +
+  scale_color_manual (values = c("blue","red","purple")) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
-  ggtitle ("Priority country categories") +
+  ggtitle ("Blue food dependent and micronutrient deficient") +
   geom_label_repel (data = fortify (islands_centroids),
                     aes (label = name, x = X, y = Y, 
                          color = Category), 
@@ -225,8 +257,9 @@ ggplot (data = world_AMC) +
   ) +
   guides (color = FALSE) +
   theme (plot.title = element_text (hjust = 0.5, size = 16),
-         legend.text = element_text (size = 12))
+         legend.text = element_text (size = 12)) 
 dev.off()
+
 
 #########################################################################################################################
 ## Plot combinations of climate vulnerability and food insecurity ----
@@ -311,8 +344,8 @@ islands_centroids <- islands_centroids %>%
 png ("Figures/Maps_compare/Food_insecure_climate_vulnerable.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_insecure_food_vuln) +
   geom_sf (aes (fill = as.factor(Risk)), lwd = .25, col = "black") +
-  scale_fill_manual (values = c( "blue","red","purple", "gray70", "white")) +
-  scale_color_manual (values = c( "blue","red","purple")) +
+  scale_fill_manual (values = c( "goldenrod1","red","darkorange2", "gray70", "white")) +
+  scale_color_manual (values = c( "goldenrod1","red","darkorange2")) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
   ggtitle ("Food insecurity and climate vulnerability") +
@@ -320,9 +353,7 @@ ggplot (data = world_insecure_food_vuln) +
                     aes (label = name, x = X, y = Y, 
                          color = Risk), 
                     size = 2.5, label.padding = 0.05,
-                    max.overlaps = 50
-  ) +
-  
+                    max.overlaps = 50) +
   guides (color = "none") +
   theme (plot.title = element_text (hjust = 0.5, size = 16),
          legend.text = element_text (size = 12))
@@ -362,7 +393,7 @@ ggplot (data = world_GAIN) +
   scale_color_viridis(direction = -1) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
-  ggtitle ("GAIN Food vulnerability") +
+  ggtitle ("GAIN food vulnerability") +
   geom_label_repel (data = fortify (islands_centroids),
                     aes (label = name, x = X, y = Y, 
                          color = GAIN_food_vuln), 
@@ -382,6 +413,7 @@ world_GCRI <- merge (world, GCRI, all = TRUE)
 
 islands <- world_GCRI %>%
   filter (subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia")) 
+
 sf::sf_use_s2(FALSE)
 islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) # named X and Y
 islands_centroids <- islands_centroids %>%
@@ -409,9 +441,7 @@ ggplot (data = world_GCRI) +
 dev.off()
 
 # micronutrient deficient, Beal data----
-
 beal <- read_sheet(ss = fspn_id, sheet = "Beal micronutrient deficiency") 
-
 world_microdef <- merge (world, beal, all = TRUE)
 
 islands <- world_microdef %>%
@@ -548,3 +578,4 @@ ggplot (data = world_ghi) +
   theme (plot.title = element_text (hjust = 0.5, size = 16),
          legend.text = element_text (size = 12))
 dev.off()
+
