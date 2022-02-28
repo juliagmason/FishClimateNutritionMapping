@@ -153,7 +153,7 @@ AMC_cat  <-  AMC %>%
       iso3 %in% blue$iso3 & is.na(mic_def_rank) ~ "Dependent on blue foods",
       iso3 %in% blue$iso3 &  mic_def_rank >100 ~  "Dependent on blue foods",
       mic_def_rank <=100 & is.na (fish_dep_rank ) ~  "Micronutrient deficient",
-      mic_def_rank <= 100 & fish_dep_rank > 100 ~ "Micronutrient deficient",
+      mic_def_rank <= 100 & !iso3 %in% blue$iso3 ~ "Micronutrient deficient",
       is.na (mic_def_rank) & is.na (fish_dep_rank) ~ "No data",
 
       TRUE ~ "Neither"))
@@ -331,6 +331,7 @@ food_insecure <- food_insecure %>%
   ))
 
 
+# climate vulnerability ----
 GAIN <- read_sheet(ss = fspn_id, sheet = "GAIN Food sector vulnerability") 
 
 GAIN_top <- GAIN %>%
@@ -339,14 +340,15 @@ GAIN_top <- GAIN %>%
 tig_cluster <- read_sheet (ss = fspn_id, sheet = "Tigchelaar climate risk clusters") 
 
 tig_vuln <- tig_cluster %>%
-  filter (cluster %in% c(3, 5)) # 46 countries
+  filter (cluster %in% c(3, 4, 5)) # 46 countries in 3 & 5; 60 with category 4
+# EDF interested in 3,4,5; maybe 2
 
 # join climate vulnerability
 clim_vuln <- GAIN %>%
   full_join (tig_cluster, by = "iso3") %>%
   # make indicator column
-  mutate (top_vuln = ifelse (iso3 %in% GAIN_top$iso3 | cluster %in% c(3, 5), 1, 0)) %>%
-  select (iso3, top_vuln)
+  mutate (top_vuln = ifelse (iso3 %in% GAIN_top$iso3 | cluster %in% c(3, 5, 4, 2), 1, 0)) %>%
+  select (iso3, top_vuln) # 72 with GAIN top 25% and tig 3 and 5; 83 with 4
 
 insecure_food_vuln <- food_insecure %>%
   #remove duplicated country column
