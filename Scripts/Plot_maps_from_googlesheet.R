@@ -65,7 +65,10 @@ AMC <- AMC %>%
           fish_loss_rank = "Fishery Climate Vulnerability Rank 2100 (1=most vulnerable)"
   ) 
 
-# Categorize countries ----
+
+
+### MAP 1: Blue foods system ### ----
+# Categorize blue foods dependency ----
 
 # AMC_cat  <-  AMC %>%
 #   mutate (
@@ -116,6 +119,10 @@ mic_dep_vuln <- mic_dep %>%
   
   filter (Vitamin_A > 0.1 | Zinc > 0.1 | Iron > 0.05)
 
+
+### protein dependence on fish from Selig et al. 2019
+
+# define protein dependent countries as those in the top 10% of Selig's nutritional dependence index
 protein_dep  <- read_sheet (ss = fspn_id, sheet = "Protein dependence on oceans") %>%
   rename (prot_dep = "Nutritional dependence" )%>% 
   # clean country names
@@ -138,11 +145,13 @@ protein_dep  <- read_sheet (ss = fspn_id, sheet = "Protein dependence on oceans"
   slice_max (prot_dep, prop = 0.1) %>%
   left_join (codes, by = "Country")
 
+# define countries as blue foods dependent if they fit the micronutrient dependence criteria from Golden et al. 2016 AND are in the top countries in terms of protein dependence
 blue <- AMC %>%
   filter (iso3 %in% mic_dep_vuln$iso3 | iso3 %in% protein_dep$iso3) %>%
   select (iso3)
   
 
+# set up to plot as blue/red/purple----
 AMC_cat  <-  AMC %>%
 
  # add color column based on Willow's red/blue/purple
@@ -164,7 +173,7 @@ AMC_cat  <-  AMC %>%
 # set order of levels
 AMC_cat$Category <- factor (AMC_cat$Category, levels = c("Dependent on blue foods", "Micronutrient deficient", "Both", "Neither", "No data"))
 
-# join to world map ----
+# join to world map 
 # to plot on world map, have to restrict to countries, not territories
 
 AMC_countries <- AMC_cat %>%
@@ -191,30 +200,60 @@ islands_centroids <- islands_centroids %>%
   mutate (X = ifelse (iso3 == "KIR", -168, X))
 
 
+# Plot blue countries only ----
+png ("Figures/Map_bluefoods_dep.png", width = 14, height = 6, units = "in", res = 300)
+world_AMC %>%
+  # just make a new column, don't have a good way of subsetting
+  mutate (Blue = ifelse (Category %in% c("Dependent on blue foods", "Both"), "blue", "not")) %>%
+  ggplot() +
+  geom_sf (aes (fill = Blue), lwd = .25, col = "black") +
+  scale_fill_manual (values = c( "blue", "white")) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Countries dependent on blue foods \n Micronutrient dependent (Golden) and top 10% of protein dependence (Selig)") +
+  theme (plot.title = element_text (hjust = 0.5, size = 12),
+         legend.position = "none")
+dev.off()
+
+# Plot micronutrient deficient countries only----
+png ("Figures/Map_micronutrient_def.png", width = 14, height = 6, units = "in", res = 300)
+world_AMC %>%
+  # just make a new column
+  mutate (Micro_def = ifelse (mic_def_rank <=100 , "def", "not")) %>%
+  ggplot() +
+  geom_sf (aes (fill = Micro_def), lwd = .25, col = "black") +
+  scale_fill_manual (values = c( "red", "white")) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Top 100 micronutrient deficient countries \n Golden data: Calcium, Iron, Omega-3, Vitamin A, Vitamin B12, Zinc") +
+  theme (plot.title = element_text (hjust = 0.5, size = 12),
+         legend.position = "none")
+dev.off()
+
 # Plot combination of blue food dependency and micronutrient deficiencies ----
 # while (!is.null(dev.list())) # code to break dev.off null device = 1
 # color guide: http://sape.inf.usi.ch/quick-reference/ggplot2/colour # ("goldenrod1", "darkorange1", "firebrick4")
 
-png ("Figures/Map_country_categories.png", width = 14, height = 6, units = "in", res = 300)
+png ("Figures/Map_bluefoods_dep_micronutrient_def.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_AMC) +
   geom_sf (aes (fill = Category), lwd = .25, col = "black") +
   scale_fill_manual (values = c("blue","red","purple", "gray70", "white")) +
   scale_color_manual (values = c("blue","red","purple")) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
-  ggtitle ("Priority country categories") +
+  ggtitle ("Blue food dependent and micronutrient deficient") +
   guides (color = "none") +
   theme (plot.title = element_text (hjust = 0.5, size = 16),
          legend.text = element_text (size = 12))
 dev.off()
 
-## Same plot but label countries with category "both"??
+## Same plot but label countries with category "both"
 both <- world_AMC %>%
   filter (Category == "Both")
 
 both_centroids <- cbind(both, st_coordinates(st_centroid(both)))
 
-png ("Figures/Map_country_categories_both.png", width = 14, height = 6, units = "in", res = 300)
+png ("Figures/Map_bluefoods_dep_micronutrient_def_bothlabel.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_AMC) +
   geom_sf (aes (fill = Category), lwd = .25, col = "black") +
   scale_fill_manual (values = c("blue","hotpink1","purple", "gray70", "white")) +
@@ -225,13 +264,14 @@ ggplot (data = world_AMC) +
   geom_label_repel (data = fortify (both_centroids),
                     aes (label = name, x = X, y = Y), 
                     color = "purple",
-                    size = 2.5, label.padding = 0.10) +
-  guides (color = FALSE) +
+                    size = 2.5, label.padding = 0.05, max.overlaps = 50) +
+  guides (color = "none") +
   theme (plot.title = element_text (hjust = 0.5, size = 16),
          legend.text = element_text (size = 12)) 
 dev.off()
 
-png ("Figures/Map_country_categories_islandlabels.png", width = 14, height = 6, units = "in", res = 300)
+# label small islands
+png ("Figures/Map_bluefoods_dep_micronutrient_def_islandlabel.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_AMC) +
   geom_sf (aes (fill = Category), lwd = .25, col = "black") +
   scale_fill_manual (values = c("blue","red","purple", "gray70", "white")) +
@@ -242,9 +282,9 @@ ggplot (data = world_AMC) +
   geom_label_repel (data = fortify (islands_centroids),
                     aes (label = name, x = X, y = Y, 
                          color = Category), 
-                    size = 3, label.padding = 0.10
+                    size = 2.5, label.padding = 0.05, max.overlaps = 50
   ) +
-  guides (color = FALSE) +
+  guides (color = "none") +
   theme (plot.title = element_text (hjust = 0.5, size = 16),
          legend.text = element_text (size = 12)) 
 dev.off()
@@ -312,13 +352,38 @@ dev.off()
 
 
 #########################################################################################################################
-## Plot combinations of climate vulnerability and food insecure ----
 
-dir.create ("Figures/Maps_compare")
+### MAP 2: Terrestrial food system climate vulnerability and food insecurity ----
 
-# food insecure and GAIN climate vulnerable or Tigchelaar vulnerable ----
 
-# do we need to have the venn diagram map or can we just have summed risk indicators
+# climate vulnerability ----
+
+# GAIN index -- staple crops
+GAIN <- read_sheet(ss = fspn_id, sheet = "GAIN Food sector vulnerability") 
+
+# define most vulnerable by quantile? 10%, 25%, 50%
+GAIN_top <- GAIN %>%
+  slice_max (GAIN_food_vuln, prop = 0.25) # 48 in top 25%, 19 in 10%, 96 in top 50%
+
+# Michelle Tigchelaar food systems paper--includes broader crops
+tig_cluster <- read_sheet (ss = fspn_id, sheet = "Tigchelaar climate risk clusters") 
+
+# tig_vuln <- tig_cluster %>%
+#   filter (cluster %in% c(3, 4, 5)) # 46 countries in 3 & 5; 60 with category 4
+
+# EDF interested in 3,4,5; maybe 2
+
+# join climate vulnerability
+clim_vuln <- GAIN %>%
+  full_join (tig_cluster, by = "iso3") %>%
+  # make indicator column
+  mutate (top_vuln = ifelse (iso3 %in% GAIN_top$iso3 | cluster %in% c(3, 5, 4, 2), 1, 0)) %>%
+  select (iso3, top_vuln) # 72 with GAIN top 25% and tig 3 and 5; 83 with 4
+
+#################################################################
+# food insecurity ----
+
+# One option: Food Insecurity Experience (subjective, from Food Systems Dashboard)
 food_insecure <- read_sheet (ss = fspn_id, sheet = "Food insecurity FSD") 
 
 food_insecure_top <- food_insecure %>%
@@ -329,26 +394,6 @@ food_insecure <- food_insecure %>%
   mutate (top_insecure = ifelse(
     iso3 %in% food_insecure_top$iso3, 1, 0
   ))
-
-
-# climate vulnerability ----
-GAIN <- read_sheet(ss = fspn_id, sheet = "GAIN Food sector vulnerability") 
-
-GAIN_top <- GAIN %>%
-  slice_max (GAIN_food_vuln, prop = 0.25) # 48 in top 25%
-
-tig_cluster <- read_sheet (ss = fspn_id, sheet = "Tigchelaar climate risk clusters") 
-
-tig_vuln <- tig_cluster %>%
-  filter (cluster %in% c(3, 4, 5)) # 46 countries in 3 & 5; 60 with category 4
-# EDF interested in 3,4,5; maybe 2
-
-# join climate vulnerability
-clim_vuln <- GAIN %>%
-  full_join (tig_cluster, by = "iso3") %>%
-  # make indicator column
-  mutate (top_vuln = ifelse (iso3 %in% GAIN_top$iso3 | cluster %in% c(3, 5, 4, 2), 1, 0)) %>%
-  select (iso3, top_vuln) # 72 with GAIN top 25% and tig 3 and 5; 83 with 4
 
 insecure_food_vuln <- food_insecure %>%
   #remove duplicated country column
@@ -434,8 +479,7 @@ ggplot (data = world_insecure_food_vuln) +
 dev.off()
 
 
-#########################################################################################################################
-## Plot combinations of climate vulnerability and POU ----
+### Prevalence of undernourishment ----
 pou <- read_sheet (ss = fspn_id, sheet = "Prevalence of undernourishment FSD")
 
 pou_top <- pou %>%
@@ -484,22 +528,58 @@ islands_centroids <- islands_centroids %>%
   #something weird with kiribati
   mutate (X = ifelse (iso3 == "KIR", -168, X))
 
+# plot climate vulnerable only----
+png ("Figures/Climate_vulnerable_25perc.png", width = 14, height = 6, units = "in", res = 300)
 
-# plot with BOTH labelled
+ggplot(world_pou_food_vuln) +
+  geom_sf (aes (fill = as.factor(top_vuln)), lwd = .25, col = "black") +
+  scale_fill_manual (values = c(  "white", "goldenrod1")) +
+  
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Climate vulnerable terrestrial food systems \n
+           Top 25% GAIN Index and Tigchelaar clusters 2,3,4,5") +
+  guides (fill = "none") +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12)
+  )
+
+dev.off()
+
+# plot pou only ----
+png ("Figures/POU_25perc.png", width = 14, height = 6, units = "in", res = 300)
+
+ggplot(world_pou_food_vuln) +
+  geom_sf (aes (fill = as.factor(top_pou)), lwd = .25, col = "black") +
+  scale_fill_manual (values = c("white", "hotpink1")) +
+  
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Top 25% Prevalence of Undernourishment") +
+  guides (fill = "none") +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12)
+  )
+
+dev.off()
+
+
+
+# plot combined with BOTH labelled----
 both_food <- world_pou_food_vuln %>%
   filter (Risk %in% c("Both"))
 
 sf::sf_use_s2(FALSE)
 both_food_centroids <- cbind(both_food, st_coordinates(st_centroid(both_food))) # named X and Y
 
-png ("Figures/Maps_compare/Food_pou_climate_vulnerable_both.png", width = 14, height = 6, units = "in", res = 300)
+png ("Figures/Food_pou_climate_vulnerable_both_25perc.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_pou_food_vuln) +
   geom_sf (aes (fill = as.factor(Risk)), lwd = .25, col = "black") +
   scale_fill_manual (values = c( "goldenrod1","hotpink1","red", "gray70", "white")) +
   scale_color_manual (values = c( "goldenrod1","hotpink1","red")) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
-  ggtitle ("Prevalance of undernourishment & climate vulnerability") +
+  ggtitle ("Prevalance of undernourishment & climate vulnerability, top 25% \n GAIN index and Tigchelaar med-high risk clusters") +
   geom_label_repel (data = fortify (both_food_centroids),
                     aes (label = name, x = X, y = Y), 
                     color = "red",
@@ -511,16 +591,24 @@ ggplot (data = world_pou_food_vuln) +
 dev.off()
 
 
+
 #############################################################################################################################
 # Plot single variable maps to compare metrics ----
 #############################################################################################################################
 dir.create ("Figures/Maps_singlevar")
 
 # Climate vulnerability: GAIN index ----
-GAIN_index <- read_sheet(ss = fspn_id, sheet = "GAIN Food sector vulnerability") 
+GAIN <- read_sheet(ss = fspn_id, sheet = "GAIN Food sector vulnerability") 
 
-  
-world_GAIN <- merge (world, GAIN_index, all = TRUE)
+# plot 50%, 10%, 25% top?
+# https://stackoverflow.com/questions/69815942/using-cut-and-quantile-to-bucket-continuous-columns-in-r
+world_GAIN <- merge (world, GAIN, all = TRUE) %>%
+  # create categorical variable to show 50, 25, 10% cutoffs
+  mutate (quantile_cat = cut (GAIN_food_vuln, 
+                              breaks = quantile (GAIN_food_vuln, probs = c(0.5, 0.75, 0.9, 1), na.rm = TRUE),
+                              labels = c ( "Top 50%", "Top 25%", "Top 10%")
+                              )
+  )
 
 islands <- world_GAIN %>%
   filter (subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia"))
@@ -532,22 +620,22 @@ islands <- world_GAIN %>%
 sf::sf_use_s2(FALSE)
 islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) # named X and Y
 islands_centroids <- islands_centroids %>%
-  filter (!is.na (GAIN_food_vuln)) %>%
+  filter (!is.na (GAIN_food_vuln), !is.na (quantile_cat)) %>%
   #something weird with kiribati
   mutate (X = ifelse (iso3 == "KIR", -168, X))
 
 
 png ("Figures/Maps_singlevar/Map_GAIN_food_vuln_islandlabels.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_GAIN) +
-  geom_sf (aes (fill = GAIN_food_vuln, color = GAIN_food_vuln), lwd = .25, col = "black") +
-  scale_fill_viridis(direction = -1) +
+  geom_sf (aes (fill = quantile_cat, color = quantile_cat), lwd = .25, col = "black") +
+  #scale_fill_manual(values = c()) +
   scale_color_viridis(direction = -1) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
-  ggtitle ("GAIN food vulnerability") +
+  ggtitle ("GAIN Index food system vulnerability") +
   geom_label_repel (data = fortify (islands_centroids),
                     aes (label = name, x = X, y = Y, 
-                         color = GAIN_food_vuln), 
+                         color = quantile_cat), 
                     size = 2.5, label.padding = 0.05,
                     max.overlaps = 50
   ) +
