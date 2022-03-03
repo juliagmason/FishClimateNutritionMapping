@@ -24,6 +24,35 @@ fspn_id <- "1H_tri9xS3Ypl6ncrU9gGpseJmia_JVykOsXc950zEp8"
 # iso3_terr has codes for territories; this means there are repeats in the iso3 column
 codes <- read_sheet(ss = fspn_id, sheet = "Country_codes") 
 
+AMC <- read_sheet (ss = fspn_id, sheet = "All metrics combined") %>%
+  arrange (Country)
+
+# manually add country codes
+codes_AMC <- codes$iso3[-which(codes$iso3 %in% c("USA-VI", "USA-HUN"))]
+AMC$iso3 <- codes_AMC
+
+# get rid of NA iso3 bc creating confusion when I left_join
+AMC <- AMC %>%
+  filter (!is.na (iso3))
+
+
+AMC <- cbind (AMC, codes_AMC)
+
+# clean: get rid of NA iso3[this gets rid of "Islands in the Mozambique Channel" and "Sahara,South"]
+# also remove Kiribati line group, creating problems and has no data
+# rename wordy column headers to work in R
+AMC <- AMC %>%
+  filter (!is.na (iso3), !iso3_terr == "KIR-LG") %>%
+  mutate (
+    # fix Kiribati iso code so it doesn't treat as a territory
+    iso3_terr = ifelse (iso3_terr == "KIR-PHX", "KIR", iso3_terr)
+  ) %>%
+  rename (mic_def_rank = "Micronutrient deficiency Ranks (1= most deficient)" ,
+          fish_dep_rank = "*MERGED DEPENDENCE RANK* (where tied in column V (e.g., Maldives and North Korea), higher rank assigned to the country for which 1) the SUM of ranks was higher; 2) had rank for both metrics)",
+          fish_loss_rank = "Fishery Climate Vulnerability Rank 2100 (1=most vulnerable)"
+  ) 
+
+
 
 
 #########################################################################################################
@@ -104,17 +133,10 @@ gaines <- read_csv ("Data/Gaines1_total_catch_change_b1.csv") %>%
   # calculate percent change
   mutate (catch_adapt_percent_gains = (catch_diff_Full - catch_diff_BAU) / catch_diff_BAU,
           catch_adapt_gains = catch_diff_Full - catch_diff_BAU) %>%
-  rename (sovereign_iso3 = iso3) %>%
-  left_join (gaines_country, by = "country") %>%
-  left_join (AMC_full, by = "iso3") %>%
-  group_by (rcp) %>%
-  mutate (iso3 = ifelse (is.na (iso3), 
-                         sovereign_iso3,
-                         iso3),
-          catch_adapt_gains_rank = dense_rank (desc(catch_adapt_gains)),
-          catch_loss_adapt_rank = dense_rank (catch_diff_Full),
-          catch_loss_BAU_rank = dense_rank (catch_diff_BAU))
 
+
+# save for later use
+save(gaines, file = "Data/gaines_projections_rcp60_85.Rdata")
 
 
 # Cheung data----
