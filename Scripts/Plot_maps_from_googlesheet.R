@@ -39,20 +39,22 @@ codes <- read_sheet(ss = fspn_id, sheet = "Country_codes")
 
 # Read in "All metrics combined" sheet and put in alphabetical order by country
 AMC <- read_sheet (ss = fspn_id, sheet = "All metrics combined") %>%
-  arrange (Country)
+  arrange (Country) %>%
+  # AMC country row has extra notes; use country column from codes
+  select (-Country)
 
 
 # Clean All metrics combined dataset ----
 
 # manually add country codes; filter out howland and virgin islands (not in AMC)
 codes_AMC <- codes %>% 
-  filter (!iso3_terr %in% c("USA-VI", "USA-HUN")) %>%
-  select (-Country)
+  filter (!iso3_terr %in% c("USA-VI", "USA-HUN")) 
 
 AMC <- cbind (AMC, codes_AMC)
 
 # clean: get rid of NA iso3[this gets rid of "Islands in the Mozambique Channel" and "Sahara,South"]
 # also remove Kiribati line group, creating problems and has no data
+# Remove the territories here; this is creating too much confusion
 # rename wordy column headers to work in R
 AMC <- AMC %>%
   filter (!is.na (iso3), !iso3_terr == "KIR-LG") %>%
@@ -63,7 +65,8 @@ AMC <- AMC %>%
   rename (mic_def_rank = "Micronutrient deficiency Ranks (1= most deficient)" ,
           fish_dep_rank = "*MERGED DEPENDENCE RANK* (where tied in column V (e.g., Maldives and North Korea), higher rank assigned to the country for which 1) the SUM of ranks was higher; 2) had rank for both metrics)",
           fish_loss_rank = "Fishery Climate Vulnerability Rank 2100 (1=most vulnerable)"
-  ) 
+  ) %>%
+  filter (! grepl ("-", iso3_terr))
 
 
 
@@ -84,7 +87,7 @@ AMC <- AMC %>%
 #       TRUE ~ "Neither"))
 #     
 #     ) %>%
-#   select (Country, iso3, iso3_terr, fish_dep_rank, fish_loss_rank, mic_def_rank, Category) 
+#   select (Country, iso3, fish_dep_rank, fish_loss_rank, mic_def_rank, Category) 
 # 
 # # set order of levels
 # AMC_cat$Category <- factor (AMC_cat$Category, levels = c("Dependent on blue foods", "Micronutrient deficient", "Both", "Neither", "No data"))
@@ -149,6 +152,10 @@ protein_dep  <- read_sheet (ss = fspn_id, sheet = "Protein dependence on oceans"
 blue <- AMC %>%
   filter (iso3 %in% mic_dep_vuln$iso3 | iso3 %in% protein_dep$iso3) %>%
   select (iso3)
+
+# define countries as micronutrient deficient if they are in the top 100 ranked micronutrient deficiency
+mic_def <- AMC %>%
+  filter (mic_def_rank <= 100)
   
 
 # set up to plot as blue/red/purple----
@@ -161,25 +168,20 @@ AMC_cat  <-  AMC %>%
       iso3 %in% blue$iso3 & mic_def_rank <=100 ~ "Both",
       iso3 %in% blue$iso3 & is.na(mic_def_rank) ~ "Dependent on blue foods",
       iso3 %in% blue$iso3 &  mic_def_rank >100 ~  "Dependent on blue foods",
-      mic_def_rank <=100 & is.na (fish_dep_rank ) ~  "Micronutrient deficient",
       mic_def_rank <= 100 & !iso3 %in% blue$iso3 ~ "Micronutrient deficient",
       is.na (mic_def_rank) & is.na (fish_dep_rank) ~ "No data",
 
       TRUE ~ "Neither"))
     
   ) %>%
-  select (Country, iso3, iso3_terr, fish_dep_rank, fish_loss_rank, mic_def_rank, Category) 
+  select (Country, iso3, fish_dep_rank, fish_loss_rank, mic_def_rank, Category) 
 
 # set order of levels
 AMC_cat$Category <- factor (AMC_cat$Category, levels = c("Dependent on blue foods", "Micronutrient deficient", "Both", "Neither", "No data"))
 
 # join to world map 
-# to plot on world map, have to restrict to countries, not territories
 
-AMC_countries <- AMC_cat %>%
-  filter (! grepl ("-", iso3_terr))
-
-world_AMC <- merge (world, AMC_countries, all = TRUE) %>%
+world_AMC <- merge (world, AMC_cat, all = TRUE) %>%
   replace_na (list (Category = "No data")) 
 
 # create subset of islands for separate labels
@@ -204,7 +206,7 @@ islands_centroids <- islands_centroids %>%
 png ("Figures/Map_bluefoods_dep.png", width = 14, height = 6, units = "in", res = 300)
 world_AMC %>%
   # just make a new column, don't have a good way of subsetting
-  mutate (Blue = ifelse (Category %in% c("Dependent on blue foods", "Both"), "blue", "not")) %>%
+  mutate (Blue = ifelse (iso3 %in% blue$iso3, "blue", "not")) %>%
   ggplot() +
   geom_sf (aes (fill = Blue), lwd = .25, col = "black") +
   scale_fill_manual (values = c( "blue", "white")) +
@@ -222,7 +224,7 @@ world_AMC %>%
   mutate (Micro_def = ifelse (mic_def_rank <=100 , "def", "not")) %>%
   ggplot() +
   geom_sf (aes (fill = Micro_def), lwd = .25, col = "black") +
-  scale_fill_manual (values = c( "red", "white")) +
+  scale_fill_manual (values = c( "hotpink1", "white")) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
   ggtitle ("Top 100 micronutrient deficient countries \n Golden data: Calcium, Iron, Omega-3, Vitamin A, Vitamin B12, Zinc") +
@@ -289,68 +291,247 @@ ggplot (data = world_AMC) +
          legend.text = element_text (size = 12)) 
 dev.off()
 
-# triple threat: blue food dependent, micronutrient deficient, and climate vulnerable ----
+
+#########################################################################################
+# MAP 1A: triple threat: blue food dependent, micronutrient deficient, and climate vulnerable ----
+
 # climate vulnerable defined as projected to lose 50% or more of their catch by 2100, using Gaines projections
 
-# made thise in Prioritize_countries.R. 12 countries for RCP 6.0, 18 countries for RCP 8.5
-load ("Data/Priority_loss_rcp60_12.RData")
-load ("Data/Priority_loss_rcp85_18.RData")
+load ("Data/gaines_projections_rcp60_85.Rdata")
+# called "gaines". For each country, it has the difference in projected future catch/biomass in 2090-2100 relative to 2012-2021 under RCP 6.0 and RCP 8.5. Catch_diff_BAU is the projected difference under BAU management and catch_diff_Full is the projected difference under fully adaptive management (MEY and transboundary mgmt). Catch_pdiff_BAU is the percent difference in projected catch under BAU management. Catch_adapt_gains is what you gain by implementing adaptive management (catch_diff_Full - catch_diff_BAU). Catch_adapt_percent_gains is the percent gain by implementing adaptive management (catch_diff_Full - catch_diff_BAU / catch_diff_BAU)
 
-# have to add iso3 codes
-loss_6_codes <- lose50_60_12 %>%
-  rename (Country = country) %>%
-  left_join (codes, by = "Country") %>%
-  mutate (iso3 = ifelse (Country == "Ivory Coast", "CIV", iso3))
+## **** this is at the territory level, and does not distinguish iso3. **** have to figure out how to get rid of territories
 
-loss_8_codes <- lose50_85_18 %>%
-  rename (Country = country) %>%
-  left_join (codes, by = "Country") %>%
-  mutate (iso3 = ifelse (Country == "Ivory Coast", "CIV", iso3))
+#unique(gaines$country[which (!gaines$country %in% AMC$Country)])
 
-# try to do this from world_AMC instead of recategorizing?
-# need to add RCP column 
-world6 <- world_AMC %>%
-  mutate (rcp = "RCP 6.0")
-world8 <- world_AMC %>%
-  mutate (rcp = "RCP 8.5")
+gaines <- gaines %>%
+   mutate (
+    country = case_when (
+      country ==  "Ivory Coast" ~ "Cote d’Ivoire",
+      grepl("publique du Congo", country) ~ "Republique du Congo", 
+      TRUE ~ country)
+   ) %>%
+  filter (country %in% AMC$Country)
 
-world_rcp <- rbind (world6, world8)
 
-world_rcp <- world_rcp %>%
-  mutate (Category = 
-            case_when (rcp == "RCP 6.0" & iso3 %in% loss_6_codes$iso3 & Category == "Both" ~ "Climate vulnerable",
-                       rcp == "RCP 8.5" & iso3 %in% loss_8_codes$iso3 & Category == "Both"~ "Climate vulnerable",
-                       Category == "Neither" ~ "None",
-                       TRUE ~ as.character(Category))
-  )
+# In previous graphs, we defined climate vulnerable countries as those that would lose >50% of their catch under BAU management, that is, catch_pdiff_BAU < -0.5
+
+# merge to world data to plot just vulnerable countries
+# might be easier to split into rcp and then merge--have to deal with NA countries
+world_gaines_60 <- merge (world, filter(gaines, rcp == "RCP 6.0"), all = TRUE) %>%
+  replace_na(list (rcp = "RCP 6.0"))
+world_gaines_85 <- merge (world, filter(gaines, rcp == "RCP 8.5"), all = TRUE) %>%
+  replace_na(list (rcp = "RCP 8.5"))
+
+world_gaines <- rbind (world_gaines_60, world_gaines_85) %>%
+  mutate (clim_vuln = ifelse (
+    catch_pdiff_BAU < -0.5, 1, 0
+  ),
+  # Categorize with blue foods first, then micronutrient deficient, then climate vulnerable
+  Category = case_when (
+    # blue foods dependent only
+     iso3 %in% blue$iso3 & !iso3 %in% mic_def$iso3 ~ "Dependent on blue foods",
+    # micronutrient deficient only
+    !iso3 %in% blue$iso3 & iso3 %in% mic_def$iso3 ~ "Micronutrient deficient",
+    # both blue foods and micronutrient deficient, but not climate vuln
+    clim_vuln %in% c(0, NA) & iso3 %in% blue$iso3 & iso3 %in% mic_def$iso3  ~ "Blue dep & micro def",
+    # # both AND climate vulnerable
+    clim_vuln == 1 & iso3 %in% blue$iso3 & iso3 %in% mic_def$iso3 ~ "Climate vulnerable",
+    is.na(clim_vuln)& !iso3 %in% blue$iso3 & !iso3 %in% mic_def$iso3 ~ "No data",
+    TRUE ~ "None"
+  )) 
+
+
 
 # set order of labels
-world_rcp$Category <- factor (world_rcp$Category, levels = c("Dependent on blue foods", "Micronutrient deficient", "Both", "Climate vulnerable", "None", "No data"))
+world_gaines$Category <- factor (world_gaines$Category, levels = c("Dependent on blue foods", "Micronutrient deficient", "Blue dep & micro def", "Climate vulnerable", "None", "No data"))
 
-triple <- world_rcp %>%
+triple <- world_gaines %>%
   filter (Category == "Climate vulnerable")
 
 triple_centroids <- cbind(triple, st_coordinates(st_centroid(triple)))
 
-png ("Figures/Maps_compare/Map_country_categories_triple_threat.png", width = 14, height = 6, units = "in", res = 300)
-ggplot (data = world_rcp) +
+png ("Figures/Blue_dep_mic_def_clim_vuln_triple_threat_label.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_gaines) +
   geom_sf (aes (fill = Category), lwd = .25, col = "black") +
-  scale_fill_manual (values = c("blue","hotpink1","purple", "red", "gray70", "white")) +
+  scale_fill_manual (values = c("blue","hotpink1","purple", "red", "gray80", "white")) +
   #scale_color_manual (values = c("blue","hotpink1","purple")) +
   facet_wrap (~rcp) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
-  ggtitle ("Blue food dependent, micronutrient deficient, and climate vulnerable") +
+  ggtitle (("Blue food dependent, micronutrient deficient, and climate vulnerable \n Golden/Selig blue foods dependence, top 100 micronutrient deficient, projected to lose > 50% of catch by 2100 under BAU mgmt,   \n Red is a subset of purple")) +
   geom_label_repel (data = fortify (triple_centroids),
                     aes (label = name, x = X, y = Y), 
                     color = "red",
                     size = 2.5, label.padding = 0.05, max.overlaps = 50) +
-  guides (color = "none") +
-  theme (plot.title = element_text (hjust = 0.5, size = 16),
-         legend.text = element_text (size = 12)) 
+  guides (color = "none") 
+  # theme (plot.title = element_text (hjust = 0.5, size = 16),
+  #        legend.text = element_text (size = 12)) 
 dev.off()
 
+## MAP 1B: first climate vulnerable, then micronutrient def, then blue ----
 
+# climate vulnerable fisheries----
+world_gaines <- rbind (world_gaines_60, world_gaines_85) %>%
+  mutate (clim_vuln = ifelse (
+    catch_pdiff_BAU < -0.5, 1, 0
+  ))
+
+# create subset of islands for separate labels
+# https://dadascience.design/post/r-low-budget-high-res-mapping-with-r-for-not-for-profit-print/
+islands <- world_gaines %>%
+  filter (clim_vuln ==1,
+          subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia"))
+
+# centroids df for labels
+# https://r-spatial.org/r/2018/10/25/ggplot2-sf-2.html
+# https://stackoverflow.com/questions/68478179/how-to-resolve-spherical-geometry-failures-when-joining-spatial-data
+
+sf::sf_use_s2(FALSE)
+islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) # named X and Y
+islands_centroids <- islands_centroids %>%
+  #something weird with kiribati
+  mutate (X = ifelse (iso3 == "KIR", -168, X))
+
+
+png ("Figures/Climate_vulnerable_fisheries_gaines.png", width = 14, height = 6, units = "in", res = 300)
+
+ggplot(world_gaines) +
+  geom_sf (aes (fill = as.factor(clim_vuln)), lwd = .25, col = "black") +
+  scale_fill_manual (values = c("white", "goldenrod1")) +
+  facet_wrap (~rcp) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Climate vulnerable fisheries \n Projected to lose > 50% of catch by 2100 under BAU mgmt") +
+  guides (fill = "none") +
+  geom_label_repel (data = fortify (islands_centroids),
+                    aes (label = name, x = X, y = Y), 
+                    col = "goldenrod1", 
+                    size = 2.5, label.padding = 0.05,
+                    max.overlaps = 50
+  ) +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12)
+  ) +
+  labs(caption = "Gray indicates no data")
+
+dev.off()
+
+# now layer on micronutrient deficiency----
+# just pull the ranking so I don't have to merge again
+mic_def <- AMC %>%
+  filter (mic_def_rank <= 100)
+
+fish_clim_micdef <- world_gaines %>%
+  mutate (Category = 
+            case_when (clim_vuln == 1 & iso3 %in% mic_def$iso3 ~ "Both",
+                       clim_vuln == 0 & iso3 %in% mic_def$iso3 ~ "Micronutrient deficient",
+                       is.na (clim_vuln) & iso3 %in% mic_def$iso3 ~ "Micronutrient deficient",
+                       clim_vuln == 1 & !iso3 %in% mic_def$iso3 ~ "Climate vulnerable",
+                       TRUE ~ "Neither/no data")
+  ) 
+
+
+islands <- fish_clim_micdef %>%
+  filter (Category != "Neither/no data",
+          subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia"))
+
+sf::sf_use_s2(FALSE)
+islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) 
+islands_centroids <- islands_centroids %>%
+  #something weird with kiribati
+  mutate (X = ifelse (iso3 == "KIR", -168, X))
+  
+png ("Figures/Climate_vulnerable_fisheries_micronutrient_deficient.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (fish_clim_micdef) +
+  geom_sf (aes (fill = as.factor(Category)), lwd = .25, col = "black") +
+  scale_fill_manual (values = c( "red", "goldenrod1","hotpink1", "white")) +
+  scale_color_manual (values = c( "red", "goldenrod1","hotpink1")) +
+  facet_wrap (~rcp) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  guides (color = "none") +
+  ggtitle ("Climate vulnerable fisheries and micronutrient deficient \n Projected to lose > 50% of catch by 2100 under BAU mgmt, top 100 micronutrient deficient") +
+  geom_label_repel (data = fortify (islands_centroids),
+                    aes (label = name, x = X, y = Y, 
+                         color = Category), 
+                    size = 2.5, label.padding = 0.05,
+                    max.overlaps = 50
+  ) 
+
+dev.off()
+
+# now layer on blue food dependent ----
+
+# one way that might be easiest to visualize is to take the subset of the red countries that are ALSO blue foods dependent
+fish_clim_micdef_blue_subset <- world_gaines %>%
+  mutate (Category = 
+            case_when (clim_vuln == 1 & iso3 %in% mic_def$iso3 & !iso3 %in% blue$iso3  ~ "Clim vuln & micro def",
+                       clim_vuln == 0 & iso3 %in% mic_def$iso3 ~ "Micronutrient deficient",
+                       is.na (clim_vuln) & iso3 %in% mic_def$iso3 ~ "Micronutrient deficient",
+                       clim_vuln == 1 & !iso3 %in% mic_def$iso3 ~ "Climate vulnerable",
+                       clim_vuln ==1 & iso3 %in% mic_def$iso3 & iso3 %in% blue$iso3 ~ "Blue foods dependent",
+                       is.na (clim_vuln) & !iso3 %in% mic_def$iso3 ~ "None/no data",
+                       TRUE ~ "None/no data")
+  ) 
+
+
+# set order of levels
+fish_clim_micdef_blue_subset$Category <- factor (fish_clim_micdef_blue_subset$Category, levels = c("Climate vulnerable", "Micronutrient deficient", "Clim vuln & micro def", "Blue foods dependent", "None/No data"))
+
+islands <- fish_clim_micdef_blue_subset %>%
+  filter (Category != "None/No data",
+          subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia"))
+
+sf::sf_use_s2(FALSE)
+islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) 
+islands_centroids <- islands_centroids %>%
+  #something weird with kiribati
+  mutate (X = ifelse (iso3 == "KIR", -168, X))
+
+png ("Figures/Climate_vulnerable_fisheries_micronutrient_deficient_bluefoods_dep_subset_islandlabels.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (fish_clim_micdef_blue_subset) +
+  geom_sf (aes (fill = as.factor(Category)), lwd = .25, col = "black") +
+  scale_fill_manual (values = c( "goldenrod1","hotpink1","red", "blue", "white")) +
+  scale_color_manual (values = c( "goldenrod1","hotpink1", "red", "blue")) +
+  facet_wrap (~rcp) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  guides (color = "none") +
+  ggtitle ("Climate vulnerable fisheries, micronutrient deficient, and blue foods dependent \n Projected to lose > 50% of catch by 2100 under BAU mgmt, top 100 micronutrient deficient, Golden/Selig blue foods dependence \n Blue is a subset of red") +
+  geom_label_repel (data = fortify (islands_centroids),
+                    aes (label = name, x = X, y = Y, 
+                         color = Category), 
+                    size = 2.5, label.padding = 0.05,
+                    max.overlaps = 50
+  ) 
+
+dev.off()
+
+# label "both" countries
+both <- fish_clim_micdef_blue_subset %>%
+  filter (Category == "Blue foods dependent")
+
+both_centroids <- cbind(both, st_coordinates(st_centroid(both)))
+
+png ("Figures/Climate_vulnerable_fisheries_micronutrient_deficient_bluefoods_dep_subset_bluelabels.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (fish_clim_micdef_blue_subset) +
+  geom_sf (aes (fill = as.factor(Category)), lwd = .25, col = "black") +
+  scale_fill_manual (values = c( "goldenrod1","hotpink1","red", "blue", "white")) +
+
+  facet_wrap (~rcp) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  guides (color = "none") +
+  ggtitle ("Climate vulnerable fisheries, micronutrient deficient, and blue foods dependent \n Projected to lose > 50% of catch by 2100 under BAU mgmt, top 100 micronutrient deficient, Golden/Selig blue foods dependence \n Blue is a subset of red") +
+  geom_label_repel (data = fortify (both_centroids),
+                    aes (label = name, x = X, y = Y), 
+                         color = "blue", 
+                    size = 2.5, label.padding = 0.05,
+                    max.overlaps = 50
+  ) 
+
+dev.off()
 #########################################################################################################################
 
 ### MAP 2: Terrestrial food system climate vulnerability and food insecurity ----
@@ -362,8 +543,12 @@ dev.off()
 GAIN <- read_sheet(ss = fspn_id, sheet = "GAIN Food sector vulnerability") 
 
 # define most vulnerable by quantile? 10%, 25%, 50%
+
+### set cutoff point. This will match food insecurity cutoff and map labels. Should be 0.25, 0.5, 0.1
+cutoff_pt <- 0.25
+
 GAIN_top <- GAIN %>%
-  slice_max (GAIN_food_vuln, prop = 0.25) # 48 in top 25%, 19 in 10%, 96 in top 50%
+  slice_max (GAIN_food_vuln, prop = cutoff_pt) # 48 in top 25%, 19 in 10%, 96 in top 50%
 
 # Michelle Tigchelaar food systems paper--includes broader crops
 tig_cluster <- read_sheet (ss = fspn_id, sheet = "Tigchelaar climate risk clusters") 
@@ -483,7 +668,7 @@ dev.off()
 pou <- read_sheet (ss = fspn_id, sheet = "Prevalence of undernourishment FSD")
 
 pou_top <- pou %>%
-  slice_max (POU, prop = 0.25)  # 42 in top 25%
+  slice_max (POU, prop = cutoff_pt)  # 42 in top 25%
 
 pou <- pou %>% 
   # make indicator column
@@ -529,7 +714,10 @@ islands_centroids <- islands_centroids %>%
   mutate (X = ifelse (iso3 == "KIR", -168, X))
 
 # plot climate vulnerable only----
-png ("Figures/Climate_vulnerable_25perc.png", width = 14, height = 6, units = "in", res = 300)
+
+# set filenames based on cutoff point
+
+png (paste0("Figures/Climate_vulnerable_", cutoff_pt * 100, "perc.png"), width = 14, height = 6, units = "in", res = 300)
 
 ggplot(world_pou_food_vuln) +
   geom_sf (aes (fill = as.factor(top_vuln)), lwd = .25, col = "black") +
@@ -537,8 +725,9 @@ ggplot(world_pou_food_vuln) +
   
   theme_bw() +
   labs (fill = "", x = "", y = "") +
-  ggtitle ("Climate vulnerable terrestrial food systems \n
-           Top 25% GAIN Index and Tigchelaar clusters 2,3,4,5") +
+  ggtitle (
+  paste0(
+  "Climate vulnerable terrestrial food systems \n Top ", cutoff_pt * 100, "% GAIN Index and Tigchelaar clusters 2,3,4,5")) +
   guides (fill = "none") +
   theme (plot.title = element_text (hjust = 0.5, size = 16),
          legend.text = element_text (size = 12)
@@ -547,7 +736,7 @@ ggplot(world_pou_food_vuln) +
 dev.off()
 
 # plot pou only ----
-png ("Figures/POU_25perc.png", width = 14, height = 6, units = "in", res = 300)
+png (paste0("Figures/POU_", cutoff_pt * 100, "perc.png"), width = 14, height = 6, units = "in", res = 300)
 
 ggplot(world_pou_food_vuln) +
   geom_sf (aes (fill = as.factor(top_pou)), lwd = .25, col = "black") +
@@ -555,7 +744,7 @@ ggplot(world_pou_food_vuln) +
   
   theme_bw() +
   labs (fill = "", x = "", y = "") +
-  ggtitle ("Top 25% Prevalence of Undernourishment") +
+  ggtitle (paste0("Top ", cutoff_pt *100, "% Prevalence of Undernourishment")) +
   guides (fill = "none") +
   theme (plot.title = element_text (hjust = 0.5, size = 16),
          legend.text = element_text (size = 12)
@@ -572,14 +761,14 @@ both_food <- world_pou_food_vuln %>%
 sf::sf_use_s2(FALSE)
 both_food_centroids <- cbind(both_food, st_coordinates(st_centroid(both_food))) # named X and Y
 
-png ("Figures/Food_pou_climate_vulnerable_both_25perc.png", width = 14, height = 6, units = "in", res = 300)
+png (paste0("Figures/Food_pou_climate_vulnerable_both_", cutoff_pt * 100, "perc.png"), width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_pou_food_vuln) +
   geom_sf (aes (fill = as.factor(Risk)), lwd = .25, col = "black") +
   scale_fill_manual (values = c( "goldenrod1","hotpink1","red", "gray70", "white")) +
   scale_color_manual (values = c( "goldenrod1","hotpink1","red")) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
-  ggtitle ("Prevalance of undernourishment & climate vulnerability, top 25% \n GAIN index and Tigchelaar med-high risk clusters") +
+  ggtitle (paste0("Prevalance of undernourishment & climate vulnerability, top ", cutoff_pt * 100, "% \n GAIN index and Tigchelaar med-high risk clusters")) +
   geom_label_repel (data = fortify (both_food_centroids),
                     aes (label = name, x = X, y = Y), 
                     color = "red",
@@ -605,8 +794,8 @@ GAIN <- read_sheet(ss = fspn_id, sheet = "GAIN Food sector vulnerability")
 world_GAIN <- merge (world, GAIN, all = TRUE) %>%
   # create categorical variable to show 50, 25, 10% cutoffs
   mutate (quantile_cat = cut (GAIN_food_vuln, 
-                              breaks = quantile (GAIN_food_vuln, probs = c(0.5, 0.75, 0.9, 1), na.rm = TRUE),
-                              labels = c ( "Top 50%", "Top 25%", "Top 10%")
+                              breaks = quantile (GAIN_food_vuln, probs = c(0, 0.5, 0.75, 0.9, 1), na.rm = TRUE),
+                              labels = c ("Low", "Top 50%", "Top 25%", "Top 10%")
                               )
   )
 
@@ -620,16 +809,16 @@ islands <- world_GAIN %>%
 sf::sf_use_s2(FALSE)
 islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) # named X and Y
 islands_centroids <- islands_centroids %>%
-  filter (!is.na (GAIN_food_vuln), !is.na (quantile_cat)) %>%
+  filter (!is.na (GAIN_food_vuln), !is.na (quantile_cat), quantile_cat != "Low") %>%
   #something weird with kiribati
   mutate (X = ifelse (iso3 == "KIR", -168, X))
 
 
-png ("Figures/Maps_singlevar/Map_GAIN_food_vuln_islandlabels.png", width = 14, height = 6, units = "in", res = 300)
+png ("Figures/Maps_singlevar/Map_GAIN_food_vuln_islandlabels_cutoffquantiles.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_GAIN) +
   geom_sf (aes (fill = quantile_cat, color = quantile_cat), lwd = .25, col = "black") +
-  #scale_fill_manual(values = c()) +
-  scale_color_viridis(direction = -1) +
+  scale_fill_manual(values = c("white", "goldenrod1", "goldenrod3", "goldenrod4")) +
+  scale_color_manual(values = c("goldenrod1", "goldenrod3", "goldenrod4")) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
   ggtitle ("GAIN Index food system vulnerability") +
@@ -642,6 +831,43 @@ ggplot (data = world_GAIN) +
   guides (color = "none") +
   theme (plot.title = element_text (hjust = 0.5, size = 16),
          legend.text = element_text (size = 12))
+dev.off()
+
+# Climate vulnerability: Tigchelaar clusters ----
+tig_cluster <- read_sheet (ss = fspn_id, sheet = "Tigchelaar climate risk clusters") 
+world_tig <- merge (world, tig_cluster, all = TRUE)
+
+# set order of levels in order of EDF priority
+tig_cluster$cluster_longname <- factor (tig_cluster$cluster_longname, levels = c("High vulnerability; dependent on domestic production; high hazards", "Import-dependent; high vulnerability", "Medium-high vulnerability; dependent on domestic production; low hazards", "Low-medium vulnerability; big producer; high hazards", "Low vulnerability; medium exposure to global markets", "Import dependent, low vulnerability"))
+
+islands <- world_tig %>%
+  filter (subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia"))
+sf::sf_use_s2(FALSE)
+islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) # named X and Y
+islands_centroids <- islands_centroids %>%
+  filter (cluster %in% c(2,3,4,5)) %>%
+  #something weird with kiribati
+  mutate (X = ifelse (iso3 == "KIR", -168, X))
+
+png ("Figures/Maps_singlevar/Map_Tigchelaar_clusters_islandlabels.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_tig) +
+  geom_sf (aes (fill = cluster_longname), lwd = .25, col = "black") +
+  # not respecting levels; set breaks manually
+  scale_fill_manual(breaks = c ("High vulnerability; dependent on domestic production; high hazards", "Import-dependent; high vulnerability", "Medium-high vulnerability; dependent on domestic production; low hazards", "Low-medium vulnerability; big producer; high hazards", "Low vulnerability; medium exposure to global markets", "Import dependent, low vulnerability"), values = c("goldenrod4", "darkorange3", "goldenrod3", "goldenrod1", "cadetblue4", "cadetblue")) +
+  scale_color_manual(c("Import dependent, high vulnerability", "Low-medium vulnerability; big producer; high hazards"), 
+                     values = c("darkorange3", "goldenrod1")) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Tigchelaar in prep food system risk clusters \n yellow/brown are EDF priority clusters") +
+  geom_label_repel (data = fortify (islands_centroids),
+                    aes (label = name, x = X, y = Y, 
+                         color = cluster_longname), 
+                    size = 2.5, label.padding = 0.05,
+                    max.overlaps = 50
+  ) +
+  guides (color = "none") +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 10))
 dev.off()
 
 # Climate vulnerability: Global climate risk index----
@@ -776,6 +1002,53 @@ ggplot (data = world_insec) +
   geom_label_repel (data = fortify (islands_centroids),
                     aes (label = name, x = X, y = Y, 
                          color = FIES), 
+                    size = 2.5, label.padding = 0.05,
+                    max.overlaps = 50
+  ) +
+  guides (color = "none") +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12))
+dev.off()
+
+# prevalence of undernourishment, POU, FSD----
+pou <- read_sheet (ss = fspn_id, sheet = "Prevalence of undernourishment FSD")
+
+# plot 50%, 10%, 25% top?
+# https://stackoverflow.com/questions/69815942/using-cut-and-quantile-to-bucket-continuous-columns-in-r
+world_pou <- merge (world, pou, all = TRUE) %>%
+  # create categorical variable to show 50, 25, 10% cutoffs
+  mutate (quantile_cat = cut (POU, 
+                              breaks = quantile (POU, probs = c(0, 0.5, 0.75, 0.9, 1), na.rm = TRUE),
+                              labels = c ("Low", "Top 50%", "Top 25%", "Top 10%")
+  )
+  )
+
+islands <- world_pou %>%
+  filter (subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia"))
+
+# centroids df for labels
+# https://r-spatial.org/r/2018/10/25/ggplot2-sf-2.html
+# https://stackoverflow.com/questions/68478179/how-to-resolve-spherical-geometry-failures-when-joining-spatial-data
+
+sf::sf_use_s2(FALSE)
+islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) # named X and Y
+islands_centroids <- islands_centroids %>%
+  filter (!is.na (POU), !is.na (quantile_cat), quantile_cat != "Low") %>%
+  #something weird with kiribati
+  mutate (X = ifelse (iso3 == "KIR", -168, X))
+
+
+png ("Figures/Maps_singlevar/Map_POU_islandlabels_cutoffquantiles.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_pou) +
+  geom_sf (aes (fill = quantile_cat, color = quantile_cat), lwd = .25, col = "black") +
+  scale_fill_manual(values = c("white", "hotpink", "hotpink3", "hotpink4")) +
+  scale_color_manual(values = c("hotpink1", "hotpink3", "hotpink4")) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Prevalence of Undernourishment") +
+  geom_label_repel (data = fortify (islands_centroids),
+                    aes (label = name, x = X, y = Y, 
+                         color = quantile_cat), 
                     size = 2.5, label.padding = 0.05,
                     max.overlaps = 50
   ) +
