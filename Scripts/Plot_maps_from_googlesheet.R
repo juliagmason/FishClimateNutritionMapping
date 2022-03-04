@@ -239,8 +239,8 @@ dev.off()
 png ("Figures/Map_bluefoods_dep_micronutrient_def.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_AMC) +
   geom_sf (aes (fill = Category), lwd = .25, col = "black") +
-  scale_fill_manual (values = c("blue","red","purple", "gray70", "white")) +
-  scale_color_manual (values = c("blue","red","purple")) +
+  scale_fill_manual (values = c("blue","hotpink1","purple", "gray70", "white")) +
+  scale_color_manual (values = c("blue","hotpink1","purple")) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
   ggtitle ("Blue food dependent and micronutrient deficient") +
@@ -276,8 +276,8 @@ dev.off()
 png ("Figures/Map_bluefoods_dep_micronutrient_def_islandlabel.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (data = world_AMC) +
   geom_sf (aes (fill = Category), lwd = .25, col = "black") +
-  scale_fill_manual (values = c("blue","red","purple", "gray70", "white")) +
-  scale_color_manual (values = c("blue","red","purple")) +
+  scale_fill_manual (values = c("blue","hotpink1","purple", "gray70", "white")) +
+  scale_color_manual (values = c("blue","hotpink1","purple")) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
   ggtitle ("Blue food dependent and micronutrient deficient") +
@@ -545,7 +545,7 @@ GAIN <- read_sheet(ss = fspn_id, sheet = "GAIN Food sector vulnerability")
 # define most vulnerable by quantile? 10%, 25%, 50%
 
 ### set cutoff point. This will match food insecurity cutoff and map labels. Should be 0.25, 0.5, 0.1
-cutoff_pt <- 0.25
+cutoff_pt <- 0.5
 
 GAIN_top <- GAIN %>%
   slice_max (GAIN_food_vuln, prop = cutoff_pt) # 48 in top 25%, 19 in 10%, 96 in top 50%
@@ -772,7 +772,7 @@ ggplot (data = world_pou_food_vuln) +
   geom_label_repel (data = fortify (both_food_centroids),
                     aes (label = name, x = X, y = Y), 
                     color = "red",
-                    size = 2.5, label.padding = 0.10,
+                    size = 2.5, label.padding = 0.05,
                     max.overlaps = 50) +
   guides (color = "none") +
   theme (plot.title = element_text (hjust = 0.5, size = 16),
