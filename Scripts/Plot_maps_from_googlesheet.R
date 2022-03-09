@@ -445,8 +445,8 @@ islands_centroids <- islands_centroids %>%
 png ("Figures/Climate_vulnerable_fisheries_micronutrient_deficient.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (fish_clim_micdef) +
   geom_sf (aes (fill = as.factor(Category)), lwd = .25, col = "black") +
-  scale_fill_manual (values = c( "red", "goldenrod1","hotpink1", "white")) +
-  scale_color_manual (values = c( "red", "goldenrod1","hotpink1")) +
+  scale_fill_manual (values = c( "red", "goldenrod1","darkorange1", "white")) +
+  scale_color_manual (values = c( "red", "goldenrod1","darkorange1")) +
   facet_wrap (~rcp) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
@@ -492,8 +492,8 @@ islands_centroids <- islands_centroids %>%
 png ("Figures/Climate_vulnerable_fisheries_micronutrient_deficient_bluefoods_dep_subset_islandlabels.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (fish_clim_micdef_blue_subset) +
   geom_sf (aes (fill = as.factor(Category)), lwd = .25, col = "black") +
-  scale_fill_manual (values = c( "goldenrod1","hotpink1","red", "blue", "white")) +
-  scale_color_manual (values = c( "goldenrod1","hotpink1", "red", "blue")) +
+  scale_fill_manual (values = c( "goldenrod1","darkorange1","red", "purple", "white")) +
+  scale_color_manual (values = c( "goldenrod1","darkorange1", "red", "purple")) +
   facet_wrap (~rcp) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
@@ -514,10 +514,10 @@ both <- fish_clim_micdef_blue_subset %>%
 
 both_centroids <- cbind(both, st_coordinates(st_centroid(both)))
 
-png ("Figures/Climate_vulnerable_fisheries_micronutrient_deficient_bluefoods_dep_subset_bluelabels.png", width = 14, height = 6, units = "in", res = 300)
+png ("Figures/Climate_vulnerable_fisheries_micronutrient_deficient_bluefoods_dep_subset_purplabels.png", width = 14, height = 6, units = "in", res = 300)
 ggplot (fish_clim_micdef_blue_subset) +
   geom_sf (aes (fill = as.factor(Category)), lwd = .25, col = "black") +
-  scale_fill_manual (values = c( "goldenrod1","hotpink1","red", "blue", "white")) +
+  scale_fill_manual (values = c( "goldenrod1","darkorange1","red", "purple", "white")) +
 
   facet_wrap (~rcp) +
   theme_bw() +
@@ -526,7 +526,7 @@ ggplot (fish_clim_micdef_blue_subset) +
   ggtitle ("Climate vulnerable fisheries, micronutrient deficient, and blue foods dependent \n Projected to lose > 50% of catch by 2100 under BAU mgmt, top 100 micronutrient deficient, Golden/Selig blue foods dependence \n Blue is a subset of red") +
   geom_label_repel (data = fortify (both_centroids),
                     aes (label = name, x = X, y = Y), 
-                         color = "blue", 
+                         color = "purple", 
                     size = 2.5, label.padding = 0.05,
                     max.overlaps = 50
   ) 
@@ -853,12 +853,12 @@ png ("Figures/Maps_singlevar/Map_Tigchelaar_clusters_islandlabels.png", width = 
 ggplot (data = world_tig) +
   geom_sf (aes (fill = cluster_longname), lwd = .25, col = "black") +
   # not respecting levels; set breaks manually
-  scale_fill_manual(breaks = c ("High vulnerability; dependent on domestic production; high hazards", "Import-dependent; high vulnerability", "Medium-high vulnerability; dependent on domestic production; low hazards", "Low-medium vulnerability; big producer; high hazards", "Low vulnerability; medium exposure to global markets", "Import dependent, low vulnerability"), values = c("goldenrod4", "darkorange3", "goldenrod3", "goldenrod1", "cadetblue4", "cadetblue")) +
+  scale_fill_manual(breaks = c ("High vulnerability; dependent on domestic production; high hazards", "Import-dependent; high vulnerability", "Medium-high vulnerability; dependent on domestic production; low hazards", "Low-medium vulnerability; big producer; high hazards", "Low vulnerability; medium exposure to global markets", "Import dependent, low vulnerability"), values = c("red", "lightblue", "hotpink1", "cadetblue", "goldenrod1", "darkorange1")) +
   scale_color_manual(c("Import dependent, high vulnerability", "Low-medium vulnerability; big producer; high hazards"), 
                      values = c("darkorange3", "goldenrod1")) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
-  ggtitle ("Tigchelaar in prep food system risk clusters \n yellow/brown are EDF priority clusters") +
+  ggtitle ("Tigchelaar in prep food system risk clusters \n red/pink are EDF priority clusters") +
   geom_label_repel (data = fortify (islands_centroids),
                     aes (label = name, x = X, y = Y, 
                          color = cluster_longname), 
