@@ -25,11 +25,14 @@ fspn_id <- "1H_tri9xS3Ypl6ncrU9gGpseJmia_JVykOsXc950zEp8"
 codes <- read_sheet(ss = fspn_id, sheet = "Country_codes") 
 
 AMC <- read_sheet (ss = fspn_id, sheet = "All metrics combined") %>%
-  arrange (Country)
+  arrange (Country) %>%  # AMC country row has extra notes; use country column from codes
+select (-Country)
 
 # manually add country codes
-codes_AMC <- codes$iso3[-which(codes$iso3 %in% c("USA-VI", "USA-HUN"))]
-AMC$iso3 <- codes_AMC
+codes_AMC <- codes %>% 
+  filter (!iso3_terr %in% c("USA-VI", "USA-HUN")) 
+
+AMC <- cbind (AMC, codes_AMC)
 
 # get rid of NA iso3 bc creating confusion when I left_join
 AMC <- AMC %>%
@@ -41,6 +44,7 @@ AMC <- cbind (AMC, codes_AMC)
 # clean: get rid of NA iso3[this gets rid of "Islands in the Mozambique Channel" and "Sahara,South"]
 # also remove Kiribati line group, creating problems and has no data
 # rename wordy column headers to work in R
+# Remove the territories here; this is creating too much confusion
 AMC <- AMC %>%
   filter (!is.na (iso3), !iso3_terr == "KIR-LG") %>%
   mutate (
@@ -50,10 +54,193 @@ AMC <- AMC %>%
   rename (mic_def_rank = "Micronutrient deficiency Ranks (1= most deficient)" ,
           fish_dep_rank = "*MERGED DEPENDENCE RANK* (where tied in column V (e.g., Maldives and North Korea), higher rank assigned to the country for which 1) the SUM of ranks was higher; 2) had rank for both metrics)",
           fish_loss_rank = "Fishery Climate Vulnerability Rank 2100 (1=most vulnerable)"
-  ) 
+  ) %>%
+  filter (! grepl ("-", iso3_terr))
+
+## update 3/18/22. making datasets here so we can tabulate countries instead of just showing maps ----
+
+## Aquatic food systems----
+# start with climate vulnerable, then micronutrient deficient, then blue foods dependent
+
+# climate vulnerable defined as projected to lose 50% or more of their catch by 2100, using Gaines projections
+
+load ("Data/gaines_projections_rcp60_85.Rdata")
+
+# called "gaines". For each country, it has the difference in projected future catch/biomass in 2090-2100 relative to 2012-2021 under RCP 6.0 and RCP 8.5. Catch_diff_BAU is the projected difference under BAU management and catch_diff_Full is the projected difference under fully adaptive management (MEY and transboundary mgmt). Catch_pdiff_BAU is the percent difference in projected catch under BAU management. Catch_adapt_gains is what you gain by implementing adaptive management (catch_diff_Full - catch_diff_BAU). Catch_adapt_percent_gains is the percent gain by implementing adaptive management (catch_diff_Full - catch_diff_BAU / catch_diff_BAU)
+
+## **** this is at the territory level, and does not distinguish iso3. **** have to figure out how to get rid of territories
+
+#unique(gaines$country[which (!gaines$country %in% AMC$Country)])
+
+# clean to match country names
+gaines <- gaines %>%
+  mutate (
+    country = case_when (
+      country ==  "Ivory Coast" ~ "Cote d’Ivoire",
+      grepl("publique du Congo", country) ~ "Republique du Congo", 
+      TRUE ~ country)
+  )
+ 
+
+### micronutrient dependence on fish:
+# From Chris Golden, proprietary data [JM has this csv, but was asked not to share, so I put rankings in the google doc. can share for internal EDF usage]
+
+# 7 columns. Iso3c (3 letter country code), nutrient, total terrestrial (amt available from land), total_aquatic (amt available from aquatic), total (sum of total terrestrial and total aquatic), prop_terrestrial, and prop_aquatic. 
+# I only care about iso3c, nutrient, and prop_aquatic, and want to rename the country column to match mic_def
+# [JE only] setwd("~/Documents/ACTIVE Research/EDF/Projects/Climate Resilient Food System/R")
+mic_dep <- read_csv ("Data/DO_NOT_SHARE_seafood_nutrient_supply_GND_012021.csv") %>%
+  select (iso3c, nutrient, prop_aquatic) %>%
+  rename (iso3 = iso3c)
+
+mic_dep_vuln <- mic_dep %>%
+  mutate (nutrient = gsub (" ", "_", nutrient)) %>%
+  pivot_wider (
+    names_from = nutrient,
+    values_from = prop_aquatic) %>%
+  
+  filter (Vitamin_A > 0.1 | Zinc > 0.1 | Iron > 0.05)
 
 
+### protein dependence on fish from Selig et al. 2019
 
+# define protein dependent countries as those in the top 10% of Selig's nutritional dependence index
+protein_dep  <- read_sheet (ss = fspn_id, sheet = "Protein dependence on oceans") %>%
+  rename (prot_dep = "Nutritional dependence" )%>% 
+  # clean country names
+  mutate (
+    Country = gsub ("-", " ", Country),
+    Country = case_when (
+      Country ==  "Cote D'Ivoire" ~ "Cote d’Ivoire",
+      Country == "The Bahamas" ~ "Bahamas",
+      Country == "Gambia, The" ~ "Gambia",
+      Country == "Great Britain" ~ "United Kingdom",
+      Country == "Congo" ~ "Republique du Congo",
+      Country == "Federated States of Micronesia" ~ "Micronesia",
+      Country == "The Former Yugoslav Republic of Macedonia" ~ "North Macedonia",
+      Country == "Brunei Darussalam" ~ "Brunei",
+      Country == "Slovakia" ~ "Slovak Republic",
+      Country == "Swaziland" ~ "Eswatini",
+      TRUE ~ Country)
+  ) %>%
+  # take top 10%
+  slice_max (prot_dep, prop = 0.1) %>%
+  left_join (codes, by = "Country")
+
+# define countries as blue foods dependent if they fit the micronutrient dependence criteria from Golden et al. 2016 AND are in the top countries in terms of protein dependence
+blue <- AMC %>%
+  filter (iso3 %in% mic_dep_vuln$iso3 | iso3 %in% protein_dep$iso3) %>%
+  select (iso3)
+
+# define countries as micronutrient deficient if they are in the top 100 ranked micronutrient deficiency
+mic_def <- AMC %>%
+  filter (mic_def_rank <= 100)
+
+## ds of aquatic food systems countries ----
+aquatic_categories <- gaines %>%
+  filter (country %in% AMC$Country) %>%
+  select (country, iso3, rcp, catch_pdiff_BAU) %>%
+  mutate (
+    
+    # define climate vulnerable as losing 50% or more of catch
+    clim_vuln = ifelse (
+    catch_pdiff_BAU < -0.5, 1, 0), 
+    
+    # color categories
+      Category = 
+        case_when (clim_vuln == 1 & iso3 %in% mic_def$iso3 & !iso3 %in% blue$iso3  ~ "Clim vuln & micro def",
+                   clim_vuln == 0 & iso3 %in% mic_def$iso3 ~ "Micronutrient deficient",
+                   is.na (clim_vuln) & iso3 %in% mic_def$iso3 ~ "Micronutrient deficient",
+                   clim_vuln == 1 & !iso3 %in% mic_def$iso3 ~ "Climate vulnerable",
+                   clim_vuln ==1 & iso3 %in% mic_def$iso3 & iso3 %in% blue$iso3 ~ "Blue foods dependent",
+                   is.na (clim_vuln) & !iso3 %in% mic_def$iso3 ~ "None/no data",
+                   TRUE ~ "None/no data")
+  )
+
+saveRDS(aquatic_categories, file = "Data/aquatic_priorities_climvuln_micdef_bluedep.Rds")
+
+# tabulate "purple" dependent on blue foods countries in rcp 6.0
+purp_aquatic <- aquatic_categories %>%
+  filter (rcp == "RCP 6.0", Category == "Blue foods dependent") %>%
+  pull(country)
+
+write.excel (purp_aquatic)
+
+## terrestrial food systems ----
+# climate vulnerability ----
+
+# GAIN index -- staple crops
+GAIN <- read_sheet(ss = fspn_id, sheet = "GAIN Food sector vulnerability") 
+
+### set cutoff point. This will match food insecurity cutoff and map labels. Should be 0.25, 0.5, 0.1
+cutoff_pt <- 0.25
+
+GAIN_top <- GAIN %>%
+  slice_max (GAIN_food_vuln, prop = cutoff_pt) # 48 in top 25%, 19 in 10%, 96 in top 50%
+
+# Michelle Tigchelaar food systems paper--includes broader crops
+tig_cluster <- read_sheet (ss = fspn_id, sheet = "Tigchelaar climate risk clusters") 
+
+# tig_vuln <- tig_cluster %>%
+#   filter (cluster %in% c(3, 4, 5)) # 46 countries in 3 & 5; 60 with category 4
+
+# EDF interested in 3,4,5; maybe 2
+
+# join climate vulnerability
+clim_vuln <- GAIN %>%
+  full_join (tig_cluster, by = "iso3") %>%
+  # make indicator column
+  mutate (top_vuln = ifelse (iso3 %in% GAIN_top$iso3 | cluster %in% c(3, 5, 4, 2), 1, 0)) %>%
+  select (-Country) # names are different from other data; join to codes later
+
+
+### food insecurity ----
+
+# Prevalence of undernourishment ----
+pou <- read_sheet (ss = fspn_id, sheet = "Prevalence of undernourishment FSD")
+
+pou_top <- pou %>%
+  slice_max (POU, prop = cutoff_pt)  # 42 in top 25%
+
+pou <- pou %>% 
+  # make indicator column
+  mutate (top_pou = ifelse(
+    iso3 %in% pou_top$iso3, 1, 0
+  ))
+
+
+## ds of terrestrial food systems countries ----
+
+# have to take the territories out of the country codes
+codes_sov <-  codes %>% filter (! grepl ("-", iso3_terr))
+
+terrestrial_categories <- pou %>%
+  #join datasets together
+  full_join (clim_vuln, by = "iso3") %>% 
+  # replace NAs with 0? not sure if this is the right move. too many forms of NAs, will only show as gray/NA if there are no data from any of these sources
+  replace_na(list(top_pou = 0, top_vuln = 0)) %>%
+  # make category column by summing indicators
+  #rowwise %>%
+  mutate ( 
+    Risk = as.factor (case_when (
+      top_vuln == 1 & top_pou == 0 ~ "Climate vulnerable",
+      top_vuln == 0 & top_pou == 1 ~ "Undernourished",
+      top_vuln == 1 & top_pou == 1 ~ "Both",
+      TRUE ~ "Neither")
+    )
+  ) %>%
+  left_join (codes_sov, by = "iso3") %>%
+  select (-c(TimePeriod, iso3_terr))
+
+
+saveRDS(terrestrial_categories, file = "Data/terrestrial_priorities_climvuln_pou.Rds")
+
+# tabulate "red" terrestrial priorities
+red_terrestrial <- terrestrial_categories %>%
+  filter (Risk == "Both") %>%
+  arrange (Country) %>%
+  pull(Country)
+
+write.excel (red_terrestrial)
 
 #########################################################################################################
 # Post Feb 2022 VT retreat: prioritizing where in the world the highest vulnerability to climate change is coincidental with the highest food and/or nutrition deficiencies ----
