@@ -417,6 +417,24 @@ ggplot(world_gaines) +
 
 dev.off()
 
+# just rcp 6.0 ----
+png ("Figures/Climate_vulnerable_fisheries_gaines_rcp60.png", width = 14, height = 6, units = "in", res = 300)
+
+world_gaines %>% 
+  filter (rcp == "RCP 6.0") %>%
+ggplot() +
+  geom_sf (aes (fill = as.factor(clim_vuln)), lwd = .25, col = "black") +
+  scale_fill_manual (values = c("white", "goldenrod1")) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Climate vulnerable fisheries \n Projected to lose > 50% of catch by 2100 under BAU mgmt in RCP 6.0") +
+  guides (fill = "none") +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12)
+  ) +
+  labs(caption = "Gray indicates no data")
+
+dev.off()
 
 # now layer on micronutrient deficiency----
 # just pull the ranking so I don't have to merge again
@@ -459,6 +477,21 @@ ggplot (fish_clim_micdef) +
                     size = 2.5, label.padding = 0.05,
                     max.overlaps = 50
   ) 
+
+dev.off()
+
+# just rcp 6.0
+png ("Figures/Climate_vulnerable_fisheries_micronutrient_deficient_rcp60.png", width = 14, height = 6, units = "in", res = 300)
+fish_clim_micdef %>%
+  filter (rcp == "RCP 6.0") %>%
+ggplot () +
+  geom_sf (aes (fill = as.factor(Category)), lwd = .25, col = "black") +
+  scale_fill_manual (values = c( "red", "goldenrod1","darkorange1", "white")) +
+  scale_color_manual (values = c( "red", "goldenrod1","darkorange1")) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  guides (color = "none") +
+  ggtitle ("Climate vulnerable fisheries and micronutrient deficient \nProjected to lose > 50% of catch by 2100 under BAU mgmt in RCP 6.0,\ntop 100 micronutrient deficient") 
 
 dev.off()
 
@@ -847,8 +880,10 @@ comb_terr_aq_priorities$Combined_risk <- factor (comb_terr_aq_priorities$Combine
 png (paste0("Figures/Combined_terrestrial_aquatic_priorities_nolabs_", cutoff_pt * 100, "perc.png"), width = 14, height = 6, units = "in", res = 300)
 
 ggplot (data = comb_terr_aq_priorities) +
-  geom_sf (aes (fill = as.factor(Combined_risk)), lwd = .25, col = "black") +
+  geom_sf (aes (fill = as.factor(Combined_risk), col = as.factor(Combined_risk)), lwd = 0.25) +
   scale_fill_manual (values = c( "purple","red", "black", "white")) +
+  scale_color_manual (values = c ("black", "black", "goldenrod1", "black")) +
+  #scale_linetype_manual (values = c(1, 1, 1, 1), lwd = c (0.25, 0.25, 1, 0.25)) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
   ggtitle (paste0("Priority countries in terrestrial and aquatic food systems")) +
