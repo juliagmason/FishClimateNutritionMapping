@@ -417,6 +417,7 @@ ggplot(world_gaines) +
 
 dev.off()
 
+
 # now layer on micronutrient deficiency----
 # just pull the ranking so I don't have to merge again
 mic_def <- AMC %>%
@@ -532,6 +533,24 @@ ggplot (fish_clim_micdef_blue_subset) +
   ) 
 
 dev.off()
+
+# plot with no labels, just RCP 6.0 ----
+png ("Figures/Climate_vulnerable_fisheries_gaines_nolab_RCP60.png", width = 14, height = 6, units = "in", res = 300)
+
+fish_clim_micdef_blue_subset %>%
+  filter (rcp == "RCP 6.0") %>%
+  ggplot() +
+  geom_sf (aes (fill = as.factor(Category)), lwd = .25, col = "black") +
+  scale_fill_manual (values = c( "goldenrod1","darkorange1","red", "purple", "white")) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  guides (color = "none") +
+  ggtitle ("Climate vulnerable fisheries, micronutrient deficient, and blue foods dependent \n Projected to lose > 50% of catch by 2100 under BAU mgmt, RCP 6.0; top 100 micronutrient deficient, Golden/Selig blue foods dependence \n Blue is a subset of red") 
+
+
+dev.off()
+
+# why is NA gray instead of white??
 #########################################################################################################################
 
 ### MAP 2: Terrestrial food system climate vulnerability and food insecurity ----
@@ -545,7 +564,7 @@ GAIN <- read_sheet(ss = fspn_id, sheet = "GAIN Food sector vulnerability")
 # define most vulnerable by quantile? 10%, 25%, 50%
 
 ### set cutoff point. This will match food insecurity cutoff and map labels. Should be 0.25, 0.5, 0.1
-cutoff_pt <- 0.5
+cutoff_pt <- 0.25
 
 GAIN_top <- GAIN %>%
   slice_max (GAIN_food_vuln, prop = cutoff_pt) # 48 in top 25%, 19 in 10%, 96 in top 50%
@@ -779,7 +798,64 @@ ggplot (data = world_pou_food_vuln) +
          legend.text = element_text (size = 12))
 dev.off()
 
+# plot with no labels ----
+png (paste0("Figures/Food_pou_climate_vulnerable_nolabs_", cutoff_pt * 100, "perc.png"), width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_pou_food_vuln) +
+  geom_sf (aes (fill = as.factor(Risk)), lwd = .25, col = "black") +
+  scale_fill_manual (values = c( "goldenrod1","hotpink1","red", "gray70", "white")) +
+  scale_color_manual (values = c( "goldenrod1","hotpink1","red")) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle (paste0("Prevalance of undernourishment & climate vulnerability, top ", cutoff_pt * 100, "% \n GAIN index and Tigchelaar med-high risk clusters")) +
+  guides (color = "none") +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12))
+dev.off()
 
+
+#########################################################################################################################
+
+### MAP 3: Overlay terrestrial and aquatic ----
+
+#  just showing the confluence of the red countries from the terrestrial maps and the purple countries from the aquatic maps (the version where we start with climate vulnerability and layer on mn deficiency and then bf dependency 3rd).
+
+# want world_pou_food_vuln$Risk == "Both and fish_clim_micdef_blue_subset$Category == "Blue foods dependent" with just rcp == RCP 6.0
+
+# just take category column from fish_clim and join to world_pou?
+aquatic_risk_category <- fish_clim_micdef_blue_subset %>%
+  filter (rcp == "RCP 6.0") %>% 
+  as_tibble() %>%
+  select (iso3, Category) 
+
+
+comb_terr_aq_priorities <- world_pou_food_vuln %>%
+  left_join (aquatic_risk_category, by = "iso3") %>%
+  mutate (Combined_risk = 
+            case_when (
+              Risk == "Both" & Category == "Blue foods dependent" ~ "Both",
+              Risk == "Both" & Category %in% c("Climate vulnerable", "Micronutrient deficient", "Clim vuln & micro def") ~ "Terrestrial priority (Red)", 
+              Risk == "Both" & is.na(Category) ~ "Terrestrial priority (Red)",
+              Category =="Blue foods dependent" & Risk %in% c("No data", "Climate vulnerable", "Neither", "Undernourished") ~ "Aquatic priority (purple)",
+              Category == "Blue foods dependent" & is.na (Risk) ~ "Aquatic priority (purple)",
+              TRUE ~ "Neither"
+            ))
+
+# set factor levels
+
+comb_terr_aq_priorities$Combined_risk <- factor (comb_terr_aq_priorities$Combined_risk, levels = c("Aquatic priority (purple)", "Terrestrial priority (Red)", "Both", "Neither"))
+
+png (paste0("Figures/Combined_terrestrial_aquatic_priorities_nolabs_", cutoff_pt * 100, "perc.png"), width = 14, height = 6, units = "in", res = 300)
+
+ggplot (data = comb_terr_aq_priorities) +
+  geom_sf (aes (fill = as.factor(Combined_risk)), lwd = .25, col = "black") +
+  scale_fill_manual (values = c( "purple","red", "black", "white")) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle (paste0("Priority countries in terrestrial and aquatic food systems")) +
+  guides (color = "none") +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12))
+dev.off()
 
 #############################################################################################################################
 # Plot single variable maps to compare metrics ----
