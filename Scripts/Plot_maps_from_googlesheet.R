@@ -1170,7 +1170,14 @@ dev.off()
 
 # global hunger index ----
 ghi <- read_sheet(ss = fspn_id, sheet = "Global Hunger Index") %>%
-  rename (iso3 = iso3_sov)
+  rename (iso3 = iso3_sov) %>%
+  mutate (severity = 
+            case_when (GHI <= 9.9 ~ "Low",
+                       between (GHI, 10, 19.9) ~ "Moderate",
+                       between (GHI, 20, 34.9) ~ "Serious",
+                       between (GHI, 35, 49.9) ~ "Alarming",
+                       GHI >= 50 ~ "Extremely alarming")
+  )
 
 world_ghi <- merge (world, ghi, all = TRUE)
 
@@ -1194,6 +1201,29 @@ ggplot (data = world_ghi) +
   geom_label_repel (data = fortify (islands_centroids),
                     aes (label = name, x = X, y = Y, 
                          color = GHI), 
+                    size = 2.5, label.padding = 0.05,
+                    max.overlaps = 50
+  ) +
+  guides (color = "none") +
+  theme (plot.title = element_text (hjust = 0.5, size = 16),
+         legend.text = element_text (size = 12))
+dev.off()
+
+
+# plot as categories
+world_ghi$severity = factor (world_ghi$severity, levels = c ("Low", "Moderate", "Serious", "Alarming", "Extremely alarming"))
+
+png ("Figures/Maps_singlevar/Map_GHI_categories_islandlabels.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_ghi) +
+  geom_sf (aes (fill = as.factor(severity)), lwd = .25, col = "black") +
+  scale_fill_viridis_d(direction = -1) +
+  scale_color_viridis_d(direction = -1) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle ("Global Hunger Index") +
+  geom_label_repel (data = fortify (islands_centroids),
+                    aes (label = name, x = X, y = Y, 
+                         color = severity), 
                     size = 2.5, label.padding = 0.05,
                     max.overlaps = 50
   ) +

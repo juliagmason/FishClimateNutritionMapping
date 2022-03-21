@@ -24,6 +24,8 @@ fspn_id <- "1H_tri9xS3Ypl6ncrU9gGpseJmia_JVykOsXc950zEp8"
 # iso3_terr has codes for territories; this means there are repeats in the iso3 column
 codes <- read_sheet(ss = fspn_id, sheet = "Country_codes") 
 
+# provide access as prompted
+
 AMC <- read_sheet (ss = fspn_id, sheet = "All metrics combined") %>%
   arrange (Country) %>%  # AMC country row has extra notes; use country column from codes
 select (-Country)
@@ -207,6 +209,18 @@ pou <- pou %>%
     iso3 %in% pou_top$iso3, 1, 0
   ))
 
+# Compare with GHI, which includes PoU and under 5 wasting, stunting, and mortality ----
+ghi <- read_sheet(ss = fspn_id, sheet = "Global Hunger Index") %>%
+  rename (iso3 = iso3_sov) %>%
+  select (-country) %>%
+  # add severity scale? maybe don't need this
+  mutate (severity = 
+            case_when (GHI <= 9.9 ~ "Low",
+                       between (GHI, 10, 19.9) ~ "Moderate",
+                       between (GHI, 20, 34.9) ~ "Serious",
+                       between (GHI, 35, 49.9) ~ "Alarming",
+                       GHI >= 50 ~ "Extremely alarming")
+          )
 
 ## ds of terrestrial food systems countries ----
 
@@ -216,17 +230,25 @@ codes_sov <-  codes %>% filter (! grepl ("-", iso3_terr))
 terrestrial_categories <- pou %>%
   #join datasets together
   full_join (clim_vuln, by = "iso3") %>% 
+  full_join (ghi, by = "iso3") %>%
   # replace NAs with 0? not sure if this is the right move. too many forms of NAs, will only show as gray/NA if there are no data from any of these sources
   replace_na(list(top_pou = 0, top_vuln = 0)) %>%
   # make category column by summing indicators
   #rowwise %>%
   mutate ( 
-    Risk = as.factor (case_when (
+    Risk_POU = as.factor (case_when (
       top_vuln == 1 & top_pou == 0 ~ "Climate vulnerable",
       top_vuln == 0 & top_pou == 1 ~ "Undernourished",
       top_vuln == 1 & top_pou == 1 ~ "Both",
-      TRUE ~ "Neither")
-    )
+      TRUE ~ "Neither")),
+    Risk_GHI = as.factor (
+      case_when (
+        top_vuln == 1 & GHI < 20 ~ "Climate vulnerable",
+        top_vuln == 1 & is.na(GHI) ~ "Climate vulnerable",
+        top_vuln == 0 & GHI > 20 ~ "Undernourished",
+        top_vuln == 1 & GHI > 20 ~ "Both",
+        TRUE ~ "Neither")
+      )
   ) %>%
   left_join (codes_sov, by = "iso3") %>%
   select (-c(TimePeriod, iso3_terr))
@@ -241,6 +263,15 @@ red_terrestrial <- terrestrial_categories %>%
   pull(Country)
 
 write.excel (red_terrestrial)
+
+
+red_terrestrial_GHI <- terrestrial_categories %>%
+  filter (Risk_GHI == "Both") %>% 
+  arrange (Country) %>%
+  pull (Country)
+
+write.excel (red_terrestrial_GHI)
+# with alarming and extremely alarming, have 6 countries, all of which are in the pou vulnerable category
 
 #########################################################################################################
 # Post Feb 2022 VT retreat: prioritizing where in the world the highest vulnerability to climate change is coincidental with the highest food and/or nutrition deficiencies ----
