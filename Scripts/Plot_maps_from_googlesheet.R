@@ -511,7 +511,7 @@ fish_clim_micdef_blue_subset <- world_gaines %>%
 
 
 # set order of levels
-fish_clim_micdef_blue_subset$Category <- factor (fish_clim_micdef_blue_subset$Category, levels = c("Climate vulnerable", "Micronutrient deficient", "Clim vuln & micro def", "Blue foods dependent", "None/No data"))
+fish_clim_micdef_blue_subset$Category <- factor (fish_clim_micdef_blue_subset$Category, levels = c("Climate vulnerable", "Micronutrient deficient", "Clim vuln & micro def", "Blue foods dependent", "None/no data"))
 
 islands <- fish_clim_micdef_blue_subset %>%
   filter (Category != "None/No data",
@@ -573,7 +573,7 @@ png ("Figures/Climate_vulnerable_fisheries_gaines_nolab_RCP60.png", width = 14, 
 fish_clim_micdef_blue_subset %>%
   filter (rcp == "RCP 6.0") %>%
   ggplot() +
-  geom_sf (aes (fill = as.factor(Category)), lwd = .25, col = "black") +
+  geom_sf (aes (fill = Category), lwd = .25, col = "black") +
   scale_fill_manual (values = c( "goldenrod1","darkorange1","red", "purple", "white")) +
   theme_bw() +
   labs (fill = "", x = "", y = "") +
