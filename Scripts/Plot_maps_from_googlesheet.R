@@ -310,9 +310,9 @@ gaines <- gaines %>%
       country ==  "Ivory Coast" ~ "Cote d’Ivoire",
       grepl("publique du Congo", country) ~ "Republique du Congo", 
       TRUE ~ country)
-   ) %>%
-  filter (country %in% AMC$Country)
-
+   ) #%>%
+  #filter (country %in% AMC$Country)
+##### NEED TO CHECK THiS, might be cutting out the islands######
 
 # In previous graphs, we defined climate vulnerable countries as those that would lose >50% of their catch under BAU management, that is, catch_pdiff_BAU < -0.5
 
