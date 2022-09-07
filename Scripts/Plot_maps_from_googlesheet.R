@@ -369,6 +369,39 @@ ggplot (data = world_gaines) +
   #        legend.text = element_text (size = 12)) 
 dev.off()
 
+# plot without labels
+png ("Figures/Blue_dep_mic_def_clim_vuln_triple_threat_nolabel.png", width = 14, height = 6, units = "in", res = 300)
+ggplot (data = world_gaines) +
+  geom_sf (aes (fill = Category), lwd = .25, col = "black") +
+  scale_fill_manual (values = c("blue","hotpink1","purple", "red", "gray80", "white")) +
+  facet_wrap (~rcp) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle (("Blue food dependent, micronutrient deficient, and climate vulnerable \nGolden/Selig blue foods dependence, top 100 micronutrient deficient, projected to lose > 50% of catch by 2100 under BAU mgmt,   \nRed is a subset of purple")) +
+  guides (color = "none") 
+
+dev.off()
+
+# plot no labels, rcp 6.0 only
+
+png ("Figures/Blue_dep_mic_def_clim_vuln_triple_threat_nolabel_rcp60.png", width = 14, height = 6, units = "in", res = 300)
+
+world_gaines %>%
+  filter (rcp == "RCP 6.0") %>%
+  ggplot () +
+  geom_sf (aes (fill = Category), lwd = .25, col = "black") +
+  scale_fill_manual (values = c("blue","hotpink1","purple", "red", "gray80", "white")) +
+  theme_bw() +
+  labs (fill = "", x = "", y = "") +
+  ggtitle (("Blue food dependent, micronutrient deficient, and climate vulnerable \nGolden/Selig blue foods dependence, top 100 micronutrient deficient, projected to lose > 50% of catch by 2100 under BAU mgmt,   \nRed is a subset of purple\nRCP 6.0")) +
+  guides (color = "none") 
+
+dev.off()
+
+
+
+###########################################################################################################################
+
 ## MAP 1B: first climate vulnerable, then micronutrient def, then blue ----
 
 # climate vulnerable fisheries----
