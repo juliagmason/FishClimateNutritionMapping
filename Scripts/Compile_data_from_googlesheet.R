@@ -11,6 +11,7 @@ library (googlesheets4)
 
 
 # id url code for our Priority Mapping google sheet
+# https://docs.google.com/spreadsheets/d/1H_tri9xS3Ypl6ncrU9gGpseJmia_JVykOsXc950zEp8/edit#gid=742482966
 fspn_id <- "1H_tri9xS3Ypl6ncrU9gGpseJmia_JVykOsXc950zEp8"
 
 # country codes compiled from our aggregation in the google sheet. 
