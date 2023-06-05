@@ -84,14 +84,25 @@ ggplot(world_gain_water) +
 
 
 # Loss of fish resources ----
-#https://github.com/cfree14/aquacast/blob/master/code/ms_figures/FigS17_eezs_analyzed.R
 
-# for first pass, take the more vulnerable, plot in country land
+
+####################################33
+# Team wants EEZs, red/blue color, 2050
+
+# https://docs.ropensci.org/mregions/
+#devtools::install_github("ropensci/mregions")
+
+library("mregions")
+library("sf")
+
+eezboundaries_shp <- mr_shp(key = "MarineRegions:eez", maxFeatures = 300)
+
 mcp <- read_sheet (ss = fspn_id, sheet = "Maximum catch potential (Cheung)")
 
+# jessica asked for 2050
 mcp_85 <- mcp %>%
-  select (Country, "RCP 8.5 2100 avg") %>%
-  rename (fish_loss = "RCP 8.5 2100 avg")  %>%
+  select (Country, "RCP 8.5 2050 average") %>%
+  rename (fish_loss = "RCP 8.5 2050 average")  %>%
   mutate (
     # remove any parentheses that split EEZs into multiple regions. will take an average or a max
     Country = gsub ("\\(.*", "", Country),
@@ -141,44 +152,36 @@ mcp_85 <- mcp %>%
   summarize (fish_loss = min (fish_loss)) %>%
   left_join (codes, by = "Country")
 
-world_mcp_85  <- merge (world, mcp_85, all = TRUE)  %>%
-  mutate (fish_loss_cut = cut(fish_loss, breaks = c (-100, -75, -50, -25, 0, 25, 50, 75, 800),
+
+
+# going to have issues with territories. I think that the last 3 characters of the iso3_terr should correspond to iso_ter1. missing some that have 2 letters, e.g. andoman and nicobar. ignore for now
+# make discrete percentage categories to make color scale clearer
+mcp_85_tmp <- mcp_85 %>%
+  mutate (iso_ter1 = str_sub(iso3_terr, start = -3),
+          fish_loss_cut = cut(fish_loss, breaks = c (-100, -75, -50, -25, 0, 25, 50, 75, 800),
                               labels = c ("< -75%", "-50%", "-25%", "0%", "25%", "50%", "75%", ">100%")
-                              )
-          ) 
+          )
+  ) 
 
-# grabbing centroid code from plot_maps_from_googlesheet
-# can't figure out how to fix color scale for subset of islands yet. 
-library (ggrepel)
+# merge to EEZs
+eezs_mcp <- merge (eezboundaries_shp, mcp_85_tmp, by = "iso_ter1", all = TRUE)
 
-islands <- world_mcp_85 %>%
-  filter (subregion %in% c ("Caribbean", "Polynesia", "Melanesia", "Micronesia"))
-
-sf::sf_use_s2(FALSE)
-islands_centroids <- cbind(islands, st_coordinates(st_centroid(islands))) # named X and Y
-islands_centroids <- islands_centroids %>%
-  #filter (fish_loss_cut %in% c("< -75%", "-50%", "-25%")) %>%
-  #something weird with kiribati
-  mutate (X = ifelse (iso3 == "KIR", -168, X))
-
-world_mcp_85 %>%
-ggplot() +
-  geom_sf (aes (fill = fish_loss_cut), lwd = .15, col = "grey20") +
-  scale_fill_viridis_d(option = "magma")+
-  geom_label_repel (data = fortify (islands_centroids),
-                    aes (label = name, x = X, y = Y, 
-                         color = fish_loss_cut), 
-                    size = 2.5, label.padding = 0.05, max.overlaps = 50
-  ) +
-  scale_color_viridis_d(option = "magma")+
-  
+# plot
+png ("Figures/Map_EEZs_fish_loss_RdBu_2050.png", width = 8, height = 6, units = "in", res = 300)
+ggplot (data = world) +
+  geom_sf (fill = "grey90") +
+  geom_sf (data = eezs_mcp,lwd = .25, (aes(fill = fish_loss_cut))) +
+  #scale_fill_distiller(palette = "Spectral") +
+  scale_fill_brewer(palette = "RdBu") +
   theme_classic() +
-  ggtitle (label = "Projected % change in fish catch potential by 2100") +
+  ggtitle (label = "Projected % change in fish catch potential by 2050") +
   labs (fill = "% change", x = "", y = "") +
   theme (plot.title = element_text (hjust = 0.5, size = 20),
          legend.text = element_text (size = 14),
          legend.title = element_text (size = 16)
   )
+dev.off()
+
 
 # dependence on aquatic foods ----
 aquatic_food_dep <- read.csv("Data/DO_NOT_SHARE_seafood_nutrient_supply_GND_012021.csv") %>%
